@@ -300,7 +300,7 @@ func (r *paymentChannelCostMerchantRepository) Find(
 
 	var list = []*billingpb.PaymentChannelCostMerchant{}
 
-	for i, objs := range mgo {
+	for _, objs := range mgo {
 		list = nil
 
 		for _, obj := range objs.Set {
@@ -318,7 +318,7 @@ func (r *paymentChannelCostMerchantRepository) Find(
 			list = append(list, v.(*billingpb.PaymentChannelCostMerchant))
 		}
 
-		c[i] = &internalPkg.PaymentChannelCostMerchantSet{Id: objs.Id, Set: list}
+		c = append(c, &internalPkg.PaymentChannelCostMerchantSet{Id: objs.Id, Set: list})
 	}
 
 	if err = r.cache.Set(key, c, 0); err != nil {
