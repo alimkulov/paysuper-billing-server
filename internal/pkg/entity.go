@@ -12,7 +12,17 @@ type PaymentChannelCostMerchantSet struct {
 	Set []*billingpb.PaymentChannelCostMerchant `bson:"set"`
 }
 
+type MgoPaymentChannelCostMerchantSet struct {
+	Id  string                                  `bson:"_id"`
+	Set []*models.MgoPaymentChannelCostMerchant `bson:"set"`
+}
+
 type PaymentChannelCostSystemSet struct {
+	Id  string                                `bson:"_id"`
+	Set []*billingpb.PaymentChannelCostSystem `bson:"set"`
+}
+
+type MgoPaymentChannelCostSystemSet struct {
 	Id  string                                `bson:"_id"`
 	Set []*models.MgoPaymentChannelCostSystem `bson:"set"`
 }

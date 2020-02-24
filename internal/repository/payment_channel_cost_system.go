@@ -272,7 +272,7 @@ func (r *paymentChannelCostSystemRepository) Find(
 
 	defer cursor.Close(ctx)
 
-	set := &internalPkg.PaymentChannelCostSystemSet{}
+	set := &internalPkg.MgoPaymentChannelCostSystemSet{}
 
 	if cursor.Next(ctx) {
 		err = cursor.Decode(&set)
