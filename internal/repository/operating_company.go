@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -26,21 +27,23 @@ type operatingCompanyRepository repository
 // NewOperatingCompanyRepository create and return an object for working with the operating company repository.
 // The returned object implements the OperatingCompanyRepositoryInterface interface.
 func NewOperatingCompanyRepository(db mongodb.SourceInterface, cache database.CacheInterface) OperatingCompanyRepositoryInterface {
-	s := &operatingCompanyRepository{db: db, cache: cache}
+	s := &operatingCompanyRepository{db: db, cache: cache, mapper: models.NewOperatingCompanyMapper()}
 	return s
 }
 
 func (r *operatingCompanyRepository) GetById(ctx context.Context, id string) (*billingpb.OperatingCompany, error) {
-	oc := billingpb.OperatingCompany{}
+	oc := &billingpb.OperatingCompany{}
 	key := fmt.Sprintf(cacheKeyOperatingCompany, id)
 
-	if err := r.cache.Get(key, &oc); err == nil {
-		return &oc, nil
+	if err := r.cache.Get(key, oc); err == nil {
+		return oc, nil
 	}
 
 	oid, _ := primitive.ObjectIDFromHex(id)
+
+	mgo := &models.MgoOperatingCompany{}
 	filter := bson.M{"_id": oid}
-	err := r.db.Collection(collectionOperatingCompanies).FindOne(ctx, filter).Decode(&oc)
+	err := r.db.Collection(collectionOperatingCompanies).FindOne(ctx, filter).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -52,6 +55,19 @@ func (r *operatingCompanyRepository) GetById(ctx context.Context, id string) (*b
 		return nil, err
 	}
 
+	obj, err := r.mapper.MapMgoToObject(mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	oc = obj.(*billingpb.OperatingCompany)
+
 	err = r.cache.Set(key, oc, 0)
 
 	if err != nil {
@@ -64,15 +80,15 @@ func (r *operatingCompanyRepository) GetById(ctx context.Context, id string) (*b
 		)
 	}
 
-	return &oc, nil
+	return oc, nil
 }
 
 func (r *operatingCompanyRepository) GetByPaymentCountry(ctx context.Context, code string) (*billingpb.OperatingCompany, error) {
-	oc := billingpb.OperatingCompany{}
+	oc := &billingpb.OperatingCompany{}
 	key := fmt.Sprintf(cacheKeyOperatingCompanyByPaymentCountry, code)
 
-	if err := r.cache.Get(key, &oc); err == nil {
-		return &oc, nil
+	if err := r.cache.Get(key, oc); err == nil {
+		return oc, nil
 	}
 
 	query := bson.M{"payment_countries": code}
@@ -83,7 +99,8 @@ func (r *operatingCompanyRepository) GetByPaymentCountry(ctx context.Context, co
 		query["payment_countries"] = code
 	}
 
-	err := r.db.Collection(collectionOperatingCompanies).FindOne(ctx, query).Decode(&oc)
+	mgo := &models.MgoOperatingCompany{}
+	err := r.db.Collection(collectionOperatingCompanies).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -95,6 +112,19 @@ func (r *operatingCompanyRepository) GetByPaymentCountry(ctx context.Context, co
 		return nil, err
 	}
 
+	obj, err := r.mapper.MapMgoToObject(mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	oc = obj.(*billingpb.OperatingCompany)
+
 	err = r.cache.Set(key, oc, 0)
 
 	if err != nil {
@@ -107,7 +137,7 @@ func (r *operatingCompanyRepository) GetByPaymentCountry(ctx context.Context, co
 		)
 	}
 
-	return &oc, err
+	return oc, err
 }
 
 func (r *operatingCompanyRepository) GetAll(ctx context.Context) ([]*billingpb.OperatingCompany, error) {
@@ -129,7 +159,8 @@ func (r *operatingCompanyRepository) GetAll(ctx context.Context) ([]*billingpb.O
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoOperatingCompany
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -140,7 +171,22 @@ func (r *operatingCompanyRepository) GetAll(ctx context.Context) ([]*billingpb.O
 		return nil, err
 	}
 
-	err = r.cache.Set(cacheKeyAllOperatingCompanies, result, 0)
+	objs := make([]*billingpb.OperatingCompany, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.OperatingCompany)
+	}
+
+	err = r.cache.Set(cacheKeyAllOperatingCompanies, objs, 0)
 
 	if err != nil {
 		zap.L().Error(
@@ -148,11 +194,11 @@ func (r *operatingCompanyRepository) GetAll(ctx context.Context) ([]*billingpb.O
 			zap.Error(err),
 			zap.String(pkg.ErrorCacheFieldCmd, "SET"),
 			zap.String(pkg.ErrorCacheFieldKey, cacheKeyAllOperatingCompanies),
-			zap.Any(pkg.ErrorCacheFieldData, result),
+			zap.Any(pkg.ErrorCacheFieldData, objs),
 		)
 	}
 
-	return result, nil
+	return objs, nil
 }
 
 func (r *operatingCompanyRepository) Upsert(ctx context.Context, oc *billingpb.OperatingCompany) error {
@@ -168,9 +214,20 @@ func (r *operatingCompanyRepository) Upsert(ctx context.Context, oc *billingpb.O
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(oc)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, oc),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
 	opts := options.Replace().SetUpsert(true)
-	_, err = r.db.Collection(collectionOperatingCompanies).ReplaceOne(ctx, filter, oc, opts)
+	_, err = r.db.Collection(collectionOperatingCompanies).ReplaceOne(ctx, filter, mgo, opts)
 
 	if err != nil {
 		zap.S().Error(
