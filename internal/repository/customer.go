@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -20,12 +21,23 @@ type customerRepository repository
 // NewCustomerRepository create and return an object for working with the customer repository.
 // The returned object implements the CustomerRepositoryInterface interface.
 func NewCustomerRepository(db mongodb.SourceInterface) CustomerRepositoryInterface {
-	s := &customerRepository{db: db}
+	s := &customerRepository{db: db, mapper: models.NewCustomerMapper()}
 	return s
 }
 
 func (r *customerRepository) Insert(ctx context.Context, obj *billingpb.Customer) error {
-	_, err := r.db.Collection(collectionCustomer).InsertOne(ctx, obj)
+	mgo, err := r.mapper.MapObjectToMgo(obj)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(collectionCustomer).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -54,8 +66,19 @@ func (r customerRepository) Update(ctx context.Context, obj *billingpb.Customer)
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(obj)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	_, err = r.db.Collection(collectionCustomer).ReplaceOne(ctx, filter, obj)
+	_, err = r.db.Collection(collectionCustomer).ReplaceOne(ctx, filter, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -72,8 +95,6 @@ func (r customerRepository) Update(ctx context.Context, obj *billingpb.Customer)
 }
 
 func (r customerRepository) GetById(ctx context.Context, id string) (*billingpb.Customer, error) {
-	var c billingpb.Customer
-
 	oid, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
@@ -86,8 +107,9 @@ func (r customerRepository) GetById(ctx context.Context, id string) (*billingpb.
 		return nil, err
 	}
 
+	var mgo = models.MgoPayoutDocument{}
 	query := bson.M{"_id": oid}
-	err = r.db.Collection(collectionCustomer).FindOne(ctx, query).Decode(&c)
+	err = r.db.Collection(collectionCustomer).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -99,7 +121,18 @@ func (r customerRepository) GetById(ctx context.Context, id string) (*billingpb.
 		return nil, err
 	}
 
-	return &c, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.Customer), nil
 }
 
 func (r customerRepository) Find(ctx context.Context, merchantId string, user *billingpb.TokenUser) (*billingpb.Customer, error) {
@@ -165,7 +198,6 @@ func (r customerRepository) Find(ctx context.Context, merchantId string, user *b
 	}
 
 	query := make(bson.M)
-	customer := new(billingpb.Customer)
 
 	if subQuery == nil || len(subQuery) <= 0 {
 		return nil, mongo.ErrNoDocuments
@@ -177,7 +209,8 @@ func (r customerRepository) Find(ctx context.Context, merchantId string, user *b
 		query = subQuery[0]
 	}
 
-	err = r.db.Collection(collectionCustomer).FindOne(ctx, query).Decode(&customer)
+	mgo := models.MgoCustomer{}
+	err = r.db.Collection(collectionCustomer).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -189,5 +222,16 @@ func (r customerRepository) Find(ctx context.Context, merchantId string, user *b
 		return nil, err
 	}
 
-	return customer, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.Customer), nil
 }
