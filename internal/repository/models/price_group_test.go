@@ -3,7 +3,6 @@ package models
 import (
 	"github.com/bxcodec/faker"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	fuzz "github.com/google/gofuzz"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -80,9 +79,9 @@ func (suite *PriceGroupTestSuite) Test_PriceGroup_MapPriceGroupToMgo_Ok_EmptyUpd
 }
 
 func (suite *PriceGroupTestSuite) Test_PriceGroup_MapMgoToPriceGroup_Ok() {
-	f := fuzz.New()
 	original := &MgoPriceGroup{}
-	f.Fuzz(original)
+	err := faker.FakeData(original)
+	assert.NoError(suite.T(), err)
 
 	obj, err := suite.mapper.MapMgoToObject(original)
 	assert.NoError(suite.T(), err)

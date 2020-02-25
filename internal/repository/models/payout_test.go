@@ -3,7 +3,6 @@ package models
 import (
 	"github.com/bxcodec/faker"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	fuzz "github.com/google/gofuzz"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -182,9 +181,9 @@ func (suite *PayoutTestSuite) Test_PayoutDocuments_MapPayoutDocumentsToMgo_Ok_Em
 }
 
 func (suite *PayoutTestSuite) Test_PayoutDocuments_MapMgoToPayoutDocuments_Ok() {
-	f := fuzz.New()
 	original := &MgoPayoutDocument{}
-	f.Fuzz(original)
+	err := faker.FakeData(original)
+	assert.NoError(suite.T(), err)
 
 	obj, err := suite.mapper.MapMgoToObject(original)
 	assert.NoError(suite.T(), err)
@@ -315,9 +314,9 @@ func (suite *PayoutChangesTestSuite) Test_PayoutDocuments_MapPayoutChangesToMgo_
 }
 
 func (suite *PayoutChangesTestSuite) Test_PayoutDocuments_MapMgoToPayoutChanges_Ok() {
-	f := fuzz.New()
 	original := &MgoPayoutDocumentChanges{}
-	f.Fuzz(original)
+	err := faker.FakeData(original)
+	assert.NoError(suite.T(), err)
 
 	obj, err := suite.mapper.MapMgoToObject(original)
 	assert.NoError(suite.T(), err)
