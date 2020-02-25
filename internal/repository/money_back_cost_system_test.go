@@ -7,6 +7,7 @@ import (
 	"github.com/paysuper/paysuper-billing-server/internal/config"
 	"github.com/paysuper/paysuper-billing-server/internal/mocks"
 	internalPkg "github.com/paysuper/paysuper-billing-server/internal/pkg"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -40,7 +41,11 @@ func (suite *MoneyBackCostSystemTestSuite) SetupTest() {
 	suite.db, err = mongodb.NewDatabase()
 	assert.NoError(suite.T(), err, "Database connection failed")
 
-	suite.repository = &moneyBackCostSystemRepository{db: suite.db, cache: &mocks.CacheInterface{}}
+	suite.repository = &moneyBackCostSystemRepository{
+		db:     suite.db,
+		cache:  &mocks.CacheInterface{},
+		mapper: models.NewMoneyBackCostSystemMapper(),
+	}
 }
 
 func (suite *MoneyBackCostSystemTestSuite) TearDownTest() {
@@ -129,7 +134,6 @@ func (suite *MoneyBackCostSystemTestSuite) TestMoneyBackCostSystem_Insert_ErrorD
 
 func (suite *MoneyBackCostSystemTestSuite) TestMoneyBackCostSystem_MultipleInsert_Ok() {
 	cost := suite.getMoneyBackCostSystemTemplate()
-	cost.Id = ""
 
 	cache := &mocks.CacheInterface{}
 	key1 := fmt.Sprintf(cacheMoneyBackCostSystemKey, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, cost.Country, cost.PaymentStage, cost.MccCode, cost.OperatingCompanyId)
@@ -432,9 +436,9 @@ func (suite *MoneyBackCostSystemTestSuite) TestMoneyBackCostSystem_GetAll_NotFou
 	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Return(nil)
 	suite.repository.cache = cache
 
-	cost2, err := suite.repository.GetAll(context.TODO())
+	cost, err := suite.repository.GetAll(context.TODO())
 	assert.NoError(suite.T(), err)
-	assert.Empty(suite.T(), cost2)
+	assert.Empty(suite.T(), cost.Items)
 }
 
 func (suite *MoneyBackCostSystemTestSuite) TestMoneyBackCostSystem_GetAll_ErrorDb() {

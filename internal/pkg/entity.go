@@ -37,6 +37,11 @@ type MoneyBackCostSystemSet struct {
 	Set []*billingpb.MoneyBackCostSystem `bson:"set"`
 }
 
+type MgoMoneyBackCostSystemSet struct {
+	Id  string                           `bson:"_id"`
+	Set []*models.MgoMoneyBackCostSystem `bson:"set"`
+}
+
 type BinData struct {
 	Id                 primitive.ObjectID `bson:"_id"`
 	CardBin            int32              `bson:"card_bin"`
