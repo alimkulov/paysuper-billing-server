@@ -107,7 +107,7 @@ func (r customerRepository) GetById(ctx context.Context, id string) (*billingpb.
 		return nil, err
 	}
 
-	var mgo = models.MgoPayoutDocument{}
+	var mgo = models.MgoCustomer{}
 	query := bson.M{"_id": oid}
 	err = r.db.Collection(collectionCustomer).FindOne(ctx, query).Decode(&mgo)
 
