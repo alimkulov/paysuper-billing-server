@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,12 +19,23 @@ type feedbackRepository repository
 // NewFeedbackRepository create and return an object for working with the feedback repository.
 // The returned object implements the FeedbackRepositoryInterface interface.
 func NewFeedbackRepository(db mongodb.SourceInterface) FeedbackRepositoryInterface {
-	s := &feedbackRepository{db: db}
+	s := &feedbackRepository{db: db, mapper: models.NewPageReviewMapper()}
 	return s
 }
 
 func (r *feedbackRepository) Insert(ctx context.Context, obj *billingpb.PageReview) error {
-	_, err := r.db.Collection(collectionFeedback).InsertOne(ctx, obj)
+	mgo, err := r.mapper.MapObjectToMgo(obj)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(collectionFeedback).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -40,8 +52,6 @@ func (r *feedbackRepository) Insert(ctx context.Context, obj *billingpb.PageRevi
 }
 
 func (r feedbackRepository) GetAll(ctx context.Context) ([]*billingpb.PageReview, error) {
-	c := []*billingpb.PageReview{}
-
 	cursor, err := r.db.Collection(collectionFeedback).Find(ctx, bson.M{})
 
 	if err != nil {
@@ -53,7 +63,8 @@ func (r feedbackRepository) GetAll(ctx context.Context) ([]*billingpb.PageReview
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &c)
+	var list []*models.MgoPageReview
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -64,5 +75,20 @@ func (r feedbackRepository) GetAll(ctx context.Context) ([]*billingpb.PageReview
 		return nil, err
 	}
 
-	return c, nil
+	objs := make([]*billingpb.PageReview, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.PageReview)
+	}
+
+	return objs, nil
 }
