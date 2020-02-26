@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -20,7 +21,7 @@ type keyProductRepository repository
 // NewKeyProductRepository create and return an object for working with the key product repository.
 // The returned object implements the KeyProductRepositoryInterface interface.
 func NewKeyProductRepository(db mongodb.SourceInterface) KeyProductRepositoryInterface {
-	s := &keyProductRepository{db: db}
+	s := &keyProductRepository{db: db, mapper: models.NewKeyProductMapper()}
 	return s
 }
 
@@ -37,9 +38,20 @@ func (r *keyProductRepository) Upsert(ctx context.Context, keyProduct *billingpb
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(keyProduct)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, keyProduct),
+		)
+		return err
+	}
+
 	opts := options.Replace().SetUpsert(true)
 	filter := bson.M{"_id": oid}
-	_, err = r.db.Collection(collectionKeyProduct).ReplaceOne(ctx, filter, keyProduct, opts)
+	_, err = r.db.Collection(collectionKeyProduct).ReplaceOne(ctx, filter, mgo, opts)
 
 	if err != nil {
 		zap.L().Error(
@@ -57,8 +69,20 @@ func (r *keyProductRepository) Upsert(ctx context.Context, keyProduct *billingpb
 
 func (r *keyProductRepository) Update(ctx context.Context, keyProduct *billingpb.KeyProduct) error {
 	oid, _ := primitive.ObjectIDFromHex(keyProduct.Id)
+
+	mgo, err := r.mapper.MapObjectToMgo(keyProduct)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, keyProduct),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	_, err := r.db.Collection(collectionKeyProduct).ReplaceOne(ctx, filter, keyProduct)
+	_, err = r.db.Collection(collectionKeyProduct).ReplaceOne(ctx, filter, mgo)
 
 	return err
 }
@@ -78,20 +102,31 @@ func (r *keyProductRepository) GetById(ctx context.Context, id string) (*billing
 
 	query := bson.M{"_id": oid, "deleted": false}
 
-	product := &billingpb.KeyProduct{}
-	err = r.db.Collection(collectionKeyProduct).FindOne(ctx, query).Decode(product)
+	var mgo = models.MgoKeyProduct{}
+	err = r.db.Collection(collectionKeyProduct).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
 			pkg.ErrorDatabaseQueryFailed,
 			zap.Error(err),
 			zap.String(pkg.ErrorDatabaseFieldCollection, collectionKeyProduct),
-			zap.Any(pkg.ErrorDatabaseFieldQuery, product),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
 		)
 		return nil, err
 	}
 
-	return product, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.KeyProduct), nil
 }
 
 func (r *keyProductRepository) CountByProjectIdSku(ctx context.Context, projectId, sku string) (int64, error) {
@@ -176,7 +211,7 @@ func (r *keyProductRepository) FindByIdsProjectId(ctx context.Context, ids []str
 		return nil, err
 	}
 
-	var list []*billingpb.KeyProduct
+	var list []*models.MgoKeyProduct
 	err = cursor.All(ctx, &list)
 
 	if err != nil {
@@ -189,7 +224,22 @@ func (r *keyProductRepository) FindByIdsProjectId(ctx context.Context, ids []str
 		return nil, err
 	}
 
-	return list, nil
+	objs := make([]*billingpb.KeyProduct, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.KeyProduct)
+	}
+
+	return objs, nil
 }
 
 func (r *keyProductRepository) Find(
@@ -251,8 +301,8 @@ func (r *keyProductRepository) Find(
 		return nil, err
 	}
 
-	var items []*billingpb.KeyProduct
-	err = cursor.All(ctx, &items)
+	var list []*models.MgoKeyProduct
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -264,7 +314,22 @@ func (r *keyProductRepository) Find(
 		return nil, err
 	}
 
-	return items, nil
+	objs := make([]*billingpb.KeyProduct, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.KeyProduct)
+	}
+
+	return objs, nil
 }
 
 func (r *keyProductRepository) FindCount(ctx context.Context, merchantId, projectId, sku, name, enabled string) (int64, error) {
