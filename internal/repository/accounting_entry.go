@@ -225,7 +225,6 @@ func (r *accountingEntryRepository) FindBySource(ctx context.Context, sourceId, 
 		"source.type": sourceType,
 	}
 
-	var aes []*billingpb.AccountingEntry
 	cursor, err := r.db.Collection(collectionAccountingEntry).Find(ctx, query)
 
 	if err != nil {
@@ -238,7 +237,8 @@ func (r *accountingEntryRepository) FindBySource(ctx context.Context, sourceId, 
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &aes)
+	var list []*models.MgoAccountingEntry
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -250,7 +250,22 @@ func (r *accountingEntryRepository) FindBySource(ctx context.Context, sourceId, 
 		return nil, err
 	}
 
-	return aes, nil
+	objs := make([]*billingpb.AccountingEntry, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.AccountingEntry)
+	}
+
+	return objs, nil
 }
 
 func (r *accountingEntryRepository) GetByTypeWithTaxes(ctx context.Context, types []string) ([]*billingpb.AccountingEntry, error) {
@@ -262,7 +277,6 @@ func (r *accountingEntryRepository) GetByTypeWithTaxes(ctx context.Context, type
 	opts := options.Find().
 		SetSort(mongodb.ToSortOption([]string{"source.type", "source.id", "-type"}))
 
-	var aes []*billingpb.AccountingEntry
 	cursor, err := r.db.Collection(collectionAccountingEntry).Find(ctx, query, opts)
 
 	if err != nil {
@@ -275,7 +289,8 @@ func (r *accountingEntryRepository) GetByTypeWithTaxes(ctx context.Context, type
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &aes)
+	var list []*models.MgoAccountingEntry
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -287,7 +302,22 @@ func (r *accountingEntryRepository) GetByTypeWithTaxes(ctx context.Context, type
 		return nil, err
 	}
 
-	return aes, nil
+	objs := make([]*billingpb.AccountingEntry, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.AccountingEntry)
+	}
+
+	return objs, nil
 }
 
 func (r *accountingEntryRepository) FindByTypeCountryDates(
@@ -314,8 +344,8 @@ func (r *accountingEntryRepository) FindByTypeCountryDates(
 		return nil, err
 	}
 
-	var aes []*billingpb.AccountingEntry
-	err = cursor.All(ctx, &aes)
+	var list []*models.MgoAccountingEntry
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -327,7 +357,22 @@ func (r *accountingEntryRepository) FindByTypeCountryDates(
 		return nil, err
 	}
 
-	return aes, nil
+	objs := make([]*billingpb.AccountingEntry, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.AccountingEntry)
+	}
+
+	return objs, nil
 }
 
 func (r *accountingEntryRepository) GetDistinctBySourceId(ctx context.Context) ([]string, error) {
@@ -389,8 +434,8 @@ func (r *accountingEntryRepository) GetCorrectionsForRoyaltyReport(
 		return nil, err
 	}
 
-	var items []*billingpb.AccountingEntry
-	err = cursor.All(ctx, &items)
+	var list []*models.MgoAccountingEntry
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -403,7 +448,22 @@ func (r *accountingEntryRepository) GetCorrectionsForRoyaltyReport(
 		return nil, err
 	}
 
-	return items, nil
+	objs := make([]*billingpb.AccountingEntry, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.AccountingEntry)
+	}
+
+	return objs, nil
 }
 
 func (r *accountingEntryRepository) GetRollingReservesForRoyaltyReport(
@@ -444,8 +504,8 @@ func (r *accountingEntryRepository) GetRollingReservesForRoyaltyReport(
 		return nil, err
 	}
 
-	var items []*billingpb.AccountingEntry
-	err = cursor.All(ctx, &items)
+	var list []*models.MgoAccountingEntry
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -458,7 +518,22 @@ func (r *accountingEntryRepository) GetRollingReservesForRoyaltyReport(
 		return nil, err
 	}
 
-	return items, nil
+	objs := make([]*billingpb.AccountingEntry, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.AccountingEntry)
+	}
+
+	return objs, nil
 }
 
 func (r *accountingEntryRepository) GetRollingReserveForBalance(
