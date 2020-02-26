@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -24,14 +25,24 @@ type productRepository repository
 // NewProductRepository create and return an object for working with the product repository.
 // The returned object implements the ProductRepositoryInterface interface.
 func NewProductRepository(db mongodb.SourceInterface, cache database.CacheInterface) ProductRepositoryInterface {
-	s := &productRepository{db: db, cache: cache}
+	s := &productRepository{db: db, cache: cache, mapper: models.NewProductMapper()}
 	return s
 }
 
 func (r productRepository) MultipleInsert(ctx context.Context, pg []*billingpb.Product) error {
 	c := make([]interface{}, len(pg))
 	for i, v := range pg {
-		c[i] = v
+		mgo, err := r.mapper.MapObjectToMgo(v)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, v),
+			)
+		}
+
+		c[i] = mgo
 	}
 
 	_, err := r.db.Collection(collectionProduct).InsertMany(ctx, c)
@@ -63,9 +74,20 @@ func (r *productRepository) Upsert(ctx context.Context, product *billingpb.Produ
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(product)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, product),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
 	opts := options.Replace().SetUpsert(true)
-	_, err = r.db.Collection(collectionProduct).ReplaceOne(ctx, filter, product, opts)
+	_, err = r.db.Collection(collectionProduct).ReplaceOne(ctx, filter, mgo, opts)
 
 	if err != nil {
 		zap.L().Error(
@@ -86,11 +108,11 @@ func (r *productRepository) Upsert(ctx context.Context, product *billingpb.Produ
 }
 
 func (r *productRepository) GetById(ctx context.Context, id string) (*billingpb.Product, error) {
-	var c billingpb.Product
+	var c = &billingpb.Product{}
 	key := fmt.Sprintf(cacheProductId, id)
 
 	if err := r.cache.Get(key, c); err == nil {
-		return &c, nil
+		return c, nil
 	}
 
 	oid, err := primitive.ObjectIDFromHex(id)
@@ -105,8 +127,9 @@ func (r *productRepository) GetById(ctx context.Context, id string) (*billingpb.
 		return nil, err
 	}
 
+	var mgo = models.MgoProduct{}
 	filter := bson.M{"_id": oid, "deleted": false}
-	err = r.db.Collection(collectionProduct).FindOne(ctx, filter).Decode(&c)
+	err = r.db.Collection(collectionProduct).FindOne(ctx, filter).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -118,11 +141,24 @@ func (r *productRepository) GetById(ctx context.Context, id string) (*billingpb.
 		return nil, err
 	}
 
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	c = obj.(*billingpb.Product)
+
 	if err := r.cache.Set(key, c, 0); err != nil {
 		zap.S().Errorf("Unable to set cache", "err", err.Error(), "key", key, "data", c)
 	}
 
-	return &c, nil
+	return c, nil
 }
 
 func (r *productRepository) CountByProjectSku(ctx context.Context, projectId string, sku string) (int64, error) {
@@ -251,7 +287,7 @@ func (r *productRepository) Find(
 		return nil, err
 	}
 
-	var list []*billingpb.Product
+	var list []*models.MgoProduct
 	err = cursor.All(ctx, &list)
 
 	if err != nil {
@@ -264,7 +300,22 @@ func (r *productRepository) Find(
 		return nil, err
 	}
 
-	return list, nil
+	objs := make([]*billingpb.Product, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.Product)
+	}
+
+	return objs, nil
 }
 
 func (r *productRepository) FindCount(
