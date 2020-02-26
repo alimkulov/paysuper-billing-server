@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	pkg2 "github.com/paysuper/paysuper-billing-server/internal/pkg"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,14 +24,24 @@ type accountingEntryRepository repository
 // NewAccountingEntryRepository create and return an object for working with the accounting entry repository.
 // The returned object implements the AccountingEntryRepositoryInterface interface.
 func NewAccountingEntryRepository(db mongodb.SourceInterface) AccountingEntryRepositoryInterface {
-	s := &accountingEntryRepository{db: db}
+	s := &accountingEntryRepository{db: db, mapper: models.NewAccountingEntryMapper()}
 	return s
 }
 
 func (r *accountingEntryRepository) MultipleInsert(ctx context.Context, objs []*billingpb.AccountingEntry) error {
 	c := make([]interface{}, len(objs))
 	for i, v := range objs {
-		c[i] = v
+		mgo, err := r.mapper.MapObjectToMgo(v)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, v),
+			)
+		}
+
+		c[i] = mgo
 	}
 
 	_, err := r.db.Collection(collectionAccountingEntry).InsertMany(ctx, c)
@@ -62,10 +73,9 @@ func (r *accountingEntryRepository) GetById(ctx context.Context, id string) (*bi
 		return nil, err
 	}
 
-	var accountingEntry *billingpb.AccountingEntry
-
+	var mgo = models.MgoAccountingEntry{}
 	query := bson.M{"_id": oid}
-	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&accountingEntry)
+	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -77,7 +87,18 @@ func (r *accountingEntryRepository) GetById(ctx context.Context, id string) (*bi
 		return nil, err
 	}
 
-	return accountingEntry, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.AccountingEntry), nil
 }
 
 func (r *accountingEntryRepository) GetByObjectSource(ctx context.Context, object, sourceId, sourceType string) (*billingpb.AccountingEntry, error) {
@@ -99,9 +120,8 @@ func (r *accountingEntryRepository) GetByObjectSource(ctx context.Context, objec
 		"source.type": sourceType,
 	}
 
-	var accountingEntry *billingpb.AccountingEntry
-
-	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&accountingEntry)
+	var mgo = models.MgoAccountingEntry{}
+	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -113,10 +133,23 @@ func (r *accountingEntryRepository) GetByObjectSource(ctx context.Context, objec
 		return nil, err
 	}
 
-	return accountingEntry, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.AccountingEntry), nil
 }
 
-func (r *accountingEntryRepository) ApplyObjectSource(ctx context.Context, object, tp, sourceId, sourceType string, source *billingpb.AccountingEntry) error {
+func (r *accountingEntryRepository) ApplyObjectSource(
+	ctx context.Context, object, tp, sourceId, sourceType string, source *billingpb.AccountingEntry,
+) (*billingpb.AccountingEntry, error) {
 	objId, err := primitive.ObjectIDFromHex(sourceId)
 
 	if err != nil {
@@ -126,7 +159,7 @@ func (r *accountingEntryRepository) ApplyObjectSource(ctx context.Context, objec
 			zap.String(pkg.ErrorDatabaseFieldCollection, collectionAccountingEntry),
 			zap.String(pkg.ErrorDatabaseFieldQuery, sourceId),
 		)
-		return err
+		return nil, err
 	}
 
 	query := bson.M{
@@ -136,7 +169,19 @@ func (r *accountingEntryRepository) ApplyObjectSource(ctx context.Context, objec
 		"source.type": sourceType,
 	}
 
-	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&source)
+	obj, err := r.mapper.MapObjectToMgo(source)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, source),
+		)
+		return nil, err
+	}
+
+	var mgo = obj.(*models.MgoAccountingEntry)
+	err = r.db.Collection(collectionAccountingEntry).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -145,10 +190,21 @@ func (r *accountingEntryRepository) ApplyObjectSource(ctx context.Context, objec
 			zap.String(pkg.ErrorDatabaseFieldCollection, collectionAccountingEntry),
 			zap.Any(pkg.ErrorDatabaseFieldQuery, query),
 		)
-		return err
+		return nil, err
 	}
 
-	return nil
+	ae, err := r.mapper.MapMgoToObject(mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return ae.(*billingpb.AccountingEntry), nil
 }
 
 func (r *accountingEntryRepository) FindBySource(ctx context.Context, sourceId, sourceType string) ([]*billingpb.AccountingEntry, error) {
@@ -483,9 +539,20 @@ func (r *accountingEntryRepository) BulkWrite(ctx context.Context, list []*billi
 			return err
 		}
 
+		mgo, err := r.mapper.MapObjectToMgo(ae)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, ae),
+			)
+			return err
+		}
+
 		operation := mongo.NewUpdateOneModel().
 			SetFilter(bson.M{"_id": oid}).
-			SetUpdate(ae)
+			SetUpdate(mgo)
 		operations = append(operations, operation)
 	}
 

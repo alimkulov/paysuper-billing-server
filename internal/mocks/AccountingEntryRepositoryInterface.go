@@ -15,17 +15,26 @@ type AccountingEntryRepositoryInterface struct {
 }
 
 // ApplyObjectSource provides a mock function with given fields: _a0, _a1, _a2, _a3, _a4, _a5
-func (_m *AccountingEntryRepositoryInterface) ApplyObjectSource(_a0 context.Context, _a1 string, _a2 string, _a3 string, _a4 string, _a5 *billingpb.AccountingEntry) error {
+func (_m *AccountingEntryRepositoryInterface) ApplyObjectSource(_a0 context.Context, _a1 string, _a2 string, _a3 string, _a4 string, _a5 *billingpb.AccountingEntry) (*billingpb.AccountingEntry, error) {
 	ret := _m.Called(_a0, _a1, _a2, _a3, _a4, _a5)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string, *billingpb.AccountingEntry) error); ok {
+	var r0 *billingpb.AccountingEntry
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string, string, *billingpb.AccountingEntry) *billingpb.AccountingEntry); ok {
 		r0 = rf(_a0, _a1, _a2, _a3, _a4, _a5)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*billingpb.AccountingEntry)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string, string, *billingpb.AccountingEntry) error); ok {
+		r1 = rf(_a0, _a1, _a2, _a3, _a4, _a5)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // BulkWrite provides a mock function with given fields: _a0, _a1

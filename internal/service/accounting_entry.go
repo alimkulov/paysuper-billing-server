@@ -643,15 +643,13 @@ func (h *accountingEntry) processRefundEvent() error {
 	}
 
 	// 2. realRefundTaxFee
-	realTaxFee := h.newEntry("")
-
-	err = h.accountingRepository.ApplyObjectSource(
+	realTaxFee, err := h.accountingRepository.ApplyObjectSource(
 		h.ctx,
 		pkg.ObjectTypeBalanceTransaction,
 		pkg.AccountingEntryTypeRealTaxFee,
 		h.order.Id,
 		repository.CollectionOrder,
-		realTaxFee,
+		h.newEntry(""),
 	)
 
 	if err != nil {
@@ -756,20 +754,19 @@ func (h *accountingEntry) processRefundEvent() error {
 	reverseTaxFee := h.newEntry(pkg.AccountingEntryTypeReverseTaxFee)
 	merchantTaxFeeCentralBankFx := h.newEntry("")
 	if h.country.VatEnabled {
-		merchantTaxFeeCostValue := h.newEntry("")
-		err = h.accountingRepository.ApplyObjectSource(
+		merchantTaxFeeCostValue, err := h.accountingRepository.ApplyObjectSource(
 			h.ctx,
 			pkg.ObjectTypeBalanceTransaction,
 			pkg.AccountingEntryTypeMerchantTaxFeeCostValue,
 			h.order.Id,
 			repository.CollectionOrder,
-			merchantTaxFeeCostValue,
+			h.newEntry(""),
 		)
 		if err != nil {
 			return err
 		}
 
-		err = h.accountingRepository.ApplyObjectSource(
+		merchantTaxFeeCentralBankFx, err = h.accountingRepository.ApplyObjectSource(
 			h.ctx,
 			pkg.ObjectTypeBalanceTransaction,
 			pkg.AccountingEntryTypeMerchantTaxFeeCentralBankFx,

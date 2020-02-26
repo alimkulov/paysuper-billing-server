@@ -29,7 +29,7 @@ require (
 	github.com/micro/go-plugins/registry/kubernetes v0.0.0-20200119172437-4fe21aa238fd
 	github.com/micro/go-plugins/wrapper/monitoring/prometheus v0.0.0-20200119172437-4fe21aa238fd
 	github.com/paysuper/paysuper-i18n v0.0.0-20190926113224-7eaca4563c7b
-	github.com/paysuper/paysuper-proto/go/billingpb v0.0.0-20200226101712-aab58b1eba5d
+	github.com/paysuper/paysuper-proto/go/billingpb v0.0.0-20200226134200-7f8fe3d607f9
 	github.com/paysuper/paysuper-proto/go/casbinpb v0.0.0-20200203130641-45056764a1d7
 	github.com/paysuper/paysuper-proto/go/currenciespb v0.0.0-20200203130641-45056764a1d7
 	github.com/paysuper/paysuper-proto/go/document_signerpb v0.0.0-20200203130641-45056764a1d7

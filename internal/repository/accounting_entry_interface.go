@@ -31,7 +31,7 @@ type AccountingEntryRepositoryInterface interface {
 	GetByObjectSource(context.Context, string, string, string) (*billingpb.AccountingEntry, error)
 
 	// ApplyObjectSource fills the passed object with data from the search result (by object, source type and id).
-	ApplyObjectSource(context.Context, string, string, string, string, *billingpb.AccountingEntry) error
+	ApplyObjectSource(context.Context, string, string, string, string, *billingpb.AccountingEntry) (*billingpb.AccountingEntry, error)
 
 	// GetDistinctBySourceId returns distinct source identities.
 	GetDistinctBySourceId(context.Context) ([]string, error)
