@@ -52,7 +52,7 @@ func (r *priceTableRepository) Insert(ctx context.Context, obj *billingpb.PriceT
 }
 
 func (r priceTableRepository) GetByRegion(ctx context.Context, region string) (*billingpb.PriceTable, error) {
-	var mgo = &models.MgoProduct{}
+	var mgo = &models.MgoPriceTable{}
 
 	query := bson.M{"currency": region}
 	err := r.db.Collection(collectionPriceTable).FindOne(ctx, query).Decode(mgo)
