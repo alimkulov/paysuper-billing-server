@@ -219,7 +219,7 @@ func (r *paymentMinLimitSystemRepository) GetAll(ctx context.Context) ([]*billin
 		return nil, err
 	}
 
-	objs := make([]*billingpb.MgoPaymentMinLimitSystem, len(list))
+	objs := make([]*billingpb.PaymentMinLimitSystem, len(list))
 
 	for i, obj := range list {
 		v, err := r.mapper.MapMgoToObject(obj)
@@ -231,10 +231,10 @@ func (r *paymentMinLimitSystemRepository) GetAll(ctx context.Context) ([]*billin
 			)
 			return nil, err
 		}
-		objs[i] = v.(*billingpb.MgoPaymentMinLimitSystem)
+		objs[i] = v.(*billingpb.PaymentMinLimitSystem)
 	}
 
-	err = r.cache.Set(cacheKeyAllPaymentMinLimitSystem, result, 0)
+	err = r.cache.Set(cacheKeyAllPaymentMinLimitSystem, objs, 0)
 
 	if err != nil {
 		zap.L().Error(
@@ -242,9 +242,9 @@ func (r *paymentMinLimitSystemRepository) GetAll(ctx context.Context) ([]*billin
 			zap.Error(err),
 			zap.String(pkg.ErrorCacheFieldCmd, "SET"),
 			zap.String(pkg.ErrorCacheFieldKey, collectionPaymentMinLimitSystem),
-			zap.Any(pkg.ErrorCacheFieldData, result),
+			zap.Any(pkg.ErrorCacheFieldData, objs),
 		)
 	}
 
-	return result, nil
+	return objs, nil
 }
