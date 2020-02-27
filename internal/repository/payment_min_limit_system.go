@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	tools "github.com/paysuper/paysuper-tools/number"
@@ -36,11 +37,18 @@ func (r *paymentMinLimitSystemRepository) MultipleInsert(
 ) error {
 	c := make([]interface{}, len(pmlsArray))
 	for i, v := range pmlsArray {
-		if v.Id == "" {
-			v.Id = primitive.NewObjectID().Hex()
-		}
 		v.Amount = tools.FormatAmount(v.Amount)
-		c[i] = v
+		mgo, err := r.mapper.MapObjectToMgo(v)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, v),
+			)
+		}
+
+		c[i] = mgo
 	}
 
 	_, err := r.db.Collection(collectionPaymentMinLimitSystem).InsertMany(ctx, c)
@@ -72,9 +80,20 @@ func (r *paymentMinLimitSystemRepository) Upsert(ctx context.Context, pmls *bill
 		)
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(pmls)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, pmls),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
 	opts := options.Replace().SetUpsert(true)
-	_, err = r.db.Collection(collectionPaymentMinLimitSystem).ReplaceOne(ctx, filter, pmls, opts)
+	_, err = r.db.Collection(collectionPaymentMinLimitSystem).ReplaceOne(ctx, filter, mgo, opts)
 
 	if err != nil {
 		zap.S().Error(
@@ -126,8 +145,9 @@ func (r *paymentMinLimitSystemRepository) GetByCurrency(
 		return pmls, nil
 	}
 
+	var mgo = models.MgoPriceGroup{}
 	query := bson.M{"currency": currency}
-	err := r.db.Collection(collectionPaymentMinLimitSystem).FindOne(ctx, query).Decode(&pmls)
+	err := r.db.Collection(collectionPaymentMinLimitSystem).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -138,6 +158,19 @@ func (r *paymentMinLimitSystemRepository) GetByCurrency(
 		)
 		return nil, err
 	}
+
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	pmls = obj.(*billingpb.PaymentMinLimitSystem)
 
 	err = r.cache.Set(key, pmls, 0)
 
@@ -173,7 +206,8 @@ func (r *paymentMinLimitSystemRepository) GetAll(ctx context.Context) ([]*billin
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoPaymentMinLimitSystem
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -183,6 +217,21 @@ func (r *paymentMinLimitSystemRepository) GetAll(ctx context.Context) ([]*billin
 			zap.Any(pkg.ErrorDatabaseFieldQuery, nil),
 		)
 		return nil, err
+	}
+
+	objs := make([]*billingpb.MgoPaymentMinLimitSystem, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.MgoPaymentMinLimitSystem)
 	}
 
 	err = r.cache.Set(cacheKeyAllPaymentMinLimitSystem, result, 0)
