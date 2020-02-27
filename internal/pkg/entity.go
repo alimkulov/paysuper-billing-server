@@ -32,6 +32,11 @@ type MoneyBackCostMerchantSet struct {
 	Set []*billingpb.MoneyBackCostMerchant `bson:"set"`
 }
 
+type MgoMoneyBackCostMerchantSet struct {
+	Id  string                             `bson:"_id"`
+	Set []*models.MgoMoneyBackCostMerchant `bson:"set"`
+}
+
 type MoneyBackCostSystemSet struct {
 	Id  string                           `bson:"_id"`
 	Set []*billingpb.MoneyBackCostSystem `bson:"set"`

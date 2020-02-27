@@ -8,6 +8,7 @@ import (
 	"github.com/paysuper/paysuper-billing-server/internal/config"
 	"github.com/paysuper/paysuper-billing-server/internal/mocks"
 	internalPkg "github.com/paysuper/paysuper-billing-server/internal/pkg"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -41,7 +42,7 @@ func (suite *MoneyBackCostMerchantTestSuite) SetupTest() {
 	suite.db, err = mongodb.NewDatabase()
 	assert.NoError(suite.T(), err, "Database connection failed")
 
-	suite.repository = &moneyBackCostMerchantRepository{db: suite.db, cache: &mocks.CacheInterface{}}
+	suite.repository = &moneyBackCostMerchantRepository{db: suite.db, cache: &mocks.CacheInterface{}, mapper: models.NewMoneyBackCostMerchantMapper()}
 }
 
 func (suite *MoneyBackCostMerchantTestSuite) TearDownTest() {
@@ -117,9 +118,22 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Insert_Sk
 	assert.NoError(suite.T(), err)
 }
 
-func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Insert_ErrorDb() {
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Insert_ErrorMap() {
 	cost := suite.getMoneyBackCostMerchantTemplate()
 	cost.CreatedAt = &timestamp.Timestamp{Seconds: -100000000000000}
+	err := suite.repository.Insert(context.TODO(), cost)
+	assert.Error(suite.T(), err)
+}
+
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Insert_ErrorDb() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+
+	collectionMock := &mongodbMocks.CollectionInterface{}
+	collectionMock.On("InsertOne", mock.Anything, mock.Anything).Return(nil, errors.New("error"))
+	dbMock := &mongodbMocks.SourceInterface{}
+	dbMock.On("Collection", mock.Anything).Return(collectionMock, nil)
+	suite.repository.db = dbMock
+
 	err := suite.repository.Insert(context.TODO(), cost)
 	assert.Error(suite.T(), err)
 }
@@ -182,9 +196,22 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_MultipleI
 	assert.NoError(suite.T(), err)
 }
 
-func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_MultipleInsert_ErrorDb() {
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_MultipleInsert_ErrorMap() {
 	cost := suite.getMoneyBackCostMerchantTemplate()
 	cost.CreatedAt = &timestamp.Timestamp{Seconds: -100000000000000}
+	err := suite.repository.MultipleInsert(context.TODO(), []*billingpb.MoneyBackCostMerchant{cost})
+	assert.Error(suite.T(), err)
+}
+
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_MultipleInsert_ErrorDb() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+
+	collectionMock := &mongodbMocks.CollectionInterface{}
+	collectionMock.On("InsertMany", mock.Anything, mock.Anything).Return(nil, errors.New("error"))
+	dbMock := &mongodbMocks.SourceInterface{}
+	dbMock.On("Collection", mock.Anything).Return(collectionMock, nil)
+	suite.repository.db = dbMock
+
 	err := suite.repository.MultipleInsert(context.TODO(), []*billingpb.MoneyBackCostMerchant{cost})
 	assert.Error(suite.T(), err)
 }
@@ -192,6 +219,14 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_MultipleI
 func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Update_InvalidId() {
 	cost := suite.getMoneyBackCostMerchantTemplate()
 	cost.Id = "id"
+
+	err := suite.repository.Update(context.TODO(), cost)
+	assert.Error(suite.T(), err)
+}
+
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Update_ErrorMap() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+	cost.MerchantId = "id"
 
 	err := suite.repository.Update(context.TODO(), cost)
 	assert.Error(suite.T(), err)
@@ -371,6 +406,35 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetById_S
 	assert.NoError(suite.T(), err)
 }
 
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetById_ErrorMap() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+	mgo, _ := models.NewMoneyBackCostMerchantMapper().MapObjectToMgo(cost)
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(mgo, nil)
+	suite.repository.mapper = mapper
+
+	cache := &mocks.CacheInterface{}
+	key1 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, cost.Country, cost.PaymentStage, cost.MccCode)
+	key2 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, "", cost.PaymentStage, cost.MccCode)
+	key3 := fmt.Sprintf(cacheMoneyBackCostMerchantAll, cost.MerchantId)
+	key4 := fmt.Sprintf(cacheMoneyBackCostMerchantKeyId, cost.Id)
+	cache.On("Delete", key1).Return(errors.New("error"))
+	cache.On("Delete", key2).Return(nil)
+	cache.On("Delete", key3).Return(nil)
+	cache.On("Delete", key4).Return(nil)
+	cache.On("Set", key4, mock.Anything, time.Duration(0)).Return(nil)
+	cache.On("Get", key4, mock.Anything).Return(errors.New("error"))
+	suite.repository.cache = cache
+
+	err := suite.repository.Insert(context.TODO(), cost)
+	assert.NoError(suite.T(), err)
+
+	_, err = suite.repository.GetById(context.TODO(), cost.Id)
+	assert.Error(suite.T(), err)
+}
+
 func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetById_OkByCache() {
 	cache := &mocks.CacheInterface{}
 	cache.On("Get", mock.Anything, &billingpb.MoneyBackCostMerchant{}).Return(nil)
@@ -432,7 +496,7 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetAllFor
 
 	cost2, err := suite.repository.GetAllForMerchant(context.TODO(), cost.Id)
 	assert.NoError(suite.T(), err)
-	assert.Empty(suite.T(), cost2)
+	assert.Empty(suite.T(), cost2.Items)
 }
 
 func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetAllForMerchant_InvalidId() {
@@ -508,6 +572,36 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetAllFor
 	assert.NoError(suite.T(), err)
 }
 
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetAllForMerchant_ErrorMap() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+	mgo, _ := models.NewMoneyBackCostMerchantMapper().MapObjectToMgo(cost)
+
+	cache := &mocks.CacheInterface{}
+	key1 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, cost.Country, cost.PaymentStage, cost.MccCode)
+	key2 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, "", cost.PaymentStage, cost.MccCode)
+	key3 := fmt.Sprintf(cacheMoneyBackCostMerchantAll, cost.MerchantId)
+	key4 := fmt.Sprintf(cacheMoneyBackCostMerchantKeyId, cost.MerchantId)
+	cache.On("Delete", key1).Return(errors.New("error"))
+	cache.On("Delete", key2).Return(nil)
+	cache.On("Delete", key3).Return(nil)
+	cache.On("Delete", key4).Return(nil)
+	cache.On("Set", key4, mock.Anything, time.Duration(0)).Return(nil)
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Return(errors.New("error"))
+	suite.repository.cache = cache
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(mgo, nil)
+	suite.repository.mapper = mapper
+
+	err := suite.repository.Insert(context.TODO(), cost)
+	assert.NoError(suite.T(), err)
+
+	_, err = suite.repository.GetAllForMerchant(context.TODO(), cost.MerchantId)
+	assert.Error(suite.T(), err)
+}
+
 func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_GetAllForMerchant_OkByCache() {
 	cache := &mocks.CacheInterface{}
 	cache.On("Get", mock.Anything, &billingpb.MoneyBackCostMerchantList{}).Return(nil)
@@ -565,6 +659,17 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Delete_Er
 	dbMock := &mongodbMocks.SourceInterface{}
 	dbMock.On("Collection", mock.Anything).Return(collectionMock, nil)
 	suite.repository.db = dbMock
+
+	err := suite.repository.Delete(context.TODO(), cost)
+	assert.Error(suite.T(), err)
+}
+
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Delete_ErrorMap() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapObjectToMgo", mock.Anything).Return(nil, errors.New("error"))
+	suite.repository.mapper = mapper
 
 	err := suite.repository.Delete(context.TODO(), cost)
 	assert.Error(suite.T(), err)
@@ -745,6 +850,43 @@ func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Find_Skip
 	obj, err := suite.repository.Find(context.TODO(), merchantId, name, payoutCurrency, undoReason, region, country, mccCode, paymentStage)
 	assert.NoError(suite.T(), err)
 	assert.Empty(suite.T(), obj)
+}
+
+func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Find_ErrorMap() {
+	cost := suite.getMoneyBackCostMerchantTemplate()
+	mgo, _ := models.NewMoneyBackCostMerchantMapper().MapObjectToMgo(cost)
+
+	cache := &mocks.CacheInterface{}
+	key1 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, cost.Country, cost.PaymentStage, cost.MccCode)
+	key2 := fmt.Sprintf(cacheMoneyBackCostMerchantKey, cost.MerchantId, cost.Name, cost.PayoutCurrency, cost.UndoReason, cost.Region, "", cost.PaymentStage, cost.MccCode)
+	key3 := fmt.Sprintf(cacheMoneyBackCostMerchantAll, cost.MerchantId)
+	key4 := fmt.Sprintf(cacheMoneyBackCostMerchantKeyId, cost.Id)
+	cache.On("Delete", key1).Return(nil)
+	cache.On("Delete", key2).Return(nil)
+	cache.On("Delete", key3).Return(nil)
+	cache.On("Delete", key4).Return(nil)
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Return(nil)
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	suite.repository.cache = cache
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(mgo, nil)
+	suite.repository.mapper = mapper
+
+	err := suite.repository.Insert(context.TODO(), cost)
+	assert.NoError(suite.T(), err)
+
+	merchantId := cost.MerchantId
+	name := cost.Name
+	payoutCurrency := cost.PayoutCurrency
+	undoReason := cost.UndoReason
+	region := cost.Region
+	country := cost.Country
+	mccCode := cost.MccCode
+	paymentStage := cost.PaymentStage
+	_, err = suite.repository.Find(context.TODO(), merchantId, name, payoutCurrency, undoReason, region, country, mccCode, paymentStage)
+	assert.Error(suite.T(), err)
 }
 
 func (suite *MoneyBackCostMerchantTestSuite) TestMoneyBackCostMerchant_Find_Ok() {
