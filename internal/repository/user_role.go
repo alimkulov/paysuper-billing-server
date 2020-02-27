@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -24,12 +25,23 @@ type userRoleRepository repository
 // NewUserRoleRepository create and return an object for working with the user role repository.
 // The returned object implements the UserRoleRepositoryInterface interface.
 func NewUserRoleRepository(db mongodb.SourceInterface, cache database.CacheInterface) UserRoleRepositoryInterface {
-	s := &userRoleRepository{db: db, cache: cache}
+	s := &userRoleRepository{db: db, cache: cache, mapper: models.NewUserRoleMapper()}
 	return s
 }
 
-func (h *userRoleRepository) AddMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
-	_, err := h.db.Collection(collectionMerchantUsersTable).InsertOne(ctx, role)
+func (r *userRoleRepository) AddMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
+	mgo, err := r.mapper.MapObjectToMgo(role)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, role),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(collectionMerchantUsersTable).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -45,8 +57,19 @@ func (h *userRoleRepository) AddMerchantUser(ctx context.Context, role *billingp
 	return nil
 }
 
-func (h *userRoleRepository) AddAdminUser(ctx context.Context, role *billingpb.UserRole) error {
-	_, err := h.db.Collection(collectionAdminUsersTable).InsertOne(ctx, role)
+func (r *userRoleRepository) AddAdminUser(ctx context.Context, role *billingpb.UserRole) error {
+	mgo, err := r.mapper.MapObjectToMgo(role)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, role),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(collectionAdminUsersTable).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -62,7 +85,7 @@ func (h *userRoleRepository) AddAdminUser(ctx context.Context, role *billingpb.U
 	return nil
 }
 
-func (h *userRoleRepository) UpdateMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
+func (r *userRoleRepository) UpdateMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
 	oid, err := primitive.ObjectIDFromHex(role.Id)
 
 	if err != nil {
@@ -75,8 +98,19 @@ func (h *userRoleRepository) UpdateMerchantUser(ctx context.Context, role *billi
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(role)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, role),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOneAndReplace(ctx, filter, role).Err()
+	err = r.db.Collection(collectionMerchantUsersTable).FindOneAndReplace(ctx, filter, mgo).Err()
 
 	if err != nil {
 		zap.L().Error(
@@ -90,7 +124,7 @@ func (h *userRoleRepository) UpdateMerchantUser(ctx context.Context, role *billi
 	}
 
 	key := fmt.Sprintf(cacheUserMerchants, role.UserId)
-	if err := h.cache.Delete(key); err != nil {
+	if err := r.cache.Delete(key); err != nil {
 		zap.L().Error(
 			pkg.ErrorCacheQueryFailed,
 			zap.Error(err),
@@ -104,7 +138,7 @@ func (h *userRoleRepository) UpdateMerchantUser(ctx context.Context, role *billi
 	return nil
 }
 
-func (h *userRoleRepository) UpdateAdminUser(ctx context.Context, role *billingpb.UserRole) error {
+func (r *userRoleRepository) UpdateAdminUser(ctx context.Context, role *billingpb.UserRole) error {
 	oid, err := primitive.ObjectIDFromHex(role.Id)
 
 	if err != nil {
@@ -117,8 +151,19 @@ func (h *userRoleRepository) UpdateAdminUser(ctx context.Context, role *billingp
 		return err
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(role)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, role),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	err = h.db.Collection(collectionAdminUsersTable).FindOneAndReplace(ctx, filter, role).Err()
+	err = r.db.Collection(collectionAdminUsersTable).FindOneAndReplace(ctx, filter, mgo).Err()
 
 	if err != nil {
 		zap.L().Error(
@@ -134,9 +179,7 @@ func (h *userRoleRepository) UpdateAdminUser(ctx context.Context, role *billingp
 	return nil
 }
 
-func (h *userRoleRepository) GetAdminUserById(ctx context.Context, id string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
-
+func (r *userRoleRepository) GetAdminUserById(ctx context.Context, id string) (*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
@@ -149,8 +192,9 @@ func (h *userRoleRepository) GetAdminUserById(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	var mgo = models.MgoUserRole{}
 	query := bson.M{"_id": oid}
-	err = h.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&user)
+	err = r.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -162,12 +206,21 @@ func (h *userRoleRepository) GetAdminUserById(ctx context.Context, id string) (*
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetMerchantUserById(ctx context.Context, id string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
-
+func (r *userRoleRepository) GetMerchantUserById(ctx context.Context, id string) (*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
@@ -180,8 +233,9 @@ func (h *userRoleRepository) GetMerchantUserById(ctx context.Context, id string)
 		return nil, err
 	}
 
+	var mgo = models.MgoUserRole{}
 	query := bson.M{"_id": oid}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&user)
+	err = r.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -193,10 +247,21 @@ func (h *userRoleRepository) GetMerchantUserById(ctx context.Context, id string)
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) DeleteAdminUser(ctx context.Context, role *billingpb.UserRole) error {
+func (r *userRoleRepository) DeleteAdminUser(ctx context.Context, role *billingpb.UserRole) error {
 	oid, err := primitive.ObjectIDFromHex(role.Id)
 
 	if err != nil {
@@ -210,7 +275,7 @@ func (h *userRoleRepository) DeleteAdminUser(ctx context.Context, role *billingp
 	}
 
 	query := bson.M{"_id": oid}
-	err = h.db.Collection(collectionAdminUsersTable).FindOneAndDelete(ctx, query).Err()
+	err = r.db.Collection(collectionAdminUsersTable).FindOneAndDelete(ctx, query).Err()
 
 	if err != nil {
 		zap.L().Error(
@@ -225,7 +290,7 @@ func (h *userRoleRepository) DeleteAdminUser(ctx context.Context, role *billingp
 	return nil
 }
 
-func (h *userRoleRepository) DeleteMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
+func (r *userRoleRepository) DeleteMerchantUser(ctx context.Context, role *billingpb.UserRole) error {
 	oid, err := primitive.ObjectIDFromHex(role.Id)
 
 	if err != nil {
@@ -239,7 +304,7 @@ func (h *userRoleRepository) DeleteMerchantUser(ctx context.Context, role *billi
 	}
 
 	query := bson.M{"_id": oid}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOneAndDelete(ctx, query).Err()
+	err = r.db.Collection(collectionMerchantUsersTable).FindOneAndDelete(ctx, query).Err()
 
 	if err != nil {
 		zap.L().Error(
@@ -252,7 +317,7 @@ func (h *userRoleRepository) DeleteMerchantUser(ctx context.Context, role *billi
 	}
 
 	key := fmt.Sprintf(cacheUserMerchants, role.UserId)
-	if err := h.cache.Delete(key); err != nil {
+	if err := r.cache.Delete(key); err != nil {
 		zap.L().Error(
 			pkg.ErrorCacheQueryFailed,
 			zap.Error(err),
@@ -266,11 +331,11 @@ func (h *userRoleRepository) DeleteMerchantUser(ctx context.Context, role *billi
 	return nil
 }
 
-func (h *userRoleRepository) GetSystemAdmin(ctx context.Context) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
+func (r *userRoleRepository) GetSystemAdmin(ctx context.Context) (*billingpb.UserRole, error) {
+	var mgo = models.MgoUserRole{}
 
 	query := bson.M{"role": billingpb.RoleSystemAdmin}
-	err := h.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&user)
+	err := r.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -282,12 +347,21 @@ func (h *userRoleRepository) GetSystemAdmin(ctx context.Context) (*billingpb.Use
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetMerchantOwner(ctx context.Context, merchantId string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
-
+func (r *userRoleRepository) GetMerchantOwner(ctx context.Context, merchantId string) (*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(merchantId)
 
 	if err != nil {
@@ -300,8 +374,9 @@ func (h *userRoleRepository) GetMerchantOwner(ctx context.Context, merchantId st
 		return nil, err
 	}
 
+	var mgo = models.MgoUserRole{}
 	query := bson.M{"merchant_id": oid, "role": billingpb.RoleMerchantOwner}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&user)
+	err = r.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -313,13 +388,24 @@ func (h *userRoleRepository) GetMerchantOwner(ctx context.Context, merchantId st
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId string) ([]*billingpb.UserRole, error) {
+func (r *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId string) ([]*billingpb.UserRole, error) {
 	var users []*billingpb.UserRole
 
-	if err := h.cache.Get(fmt.Sprintf(cacheUserMerchants, userId), users); err == nil {
+	if err := r.cache.Get(fmt.Sprintf(cacheUserMerchants, userId), users); err == nil {
 		return users, nil
 	}
 
@@ -336,7 +422,7 @@ func (h *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId str
 	}
 
 	query := bson.M{"user_id": oid}
-	cursor, err := h.db.Collection(collectionMerchantUsersTable).Find(ctx, query)
+	cursor, err := r.db.Collection(collectionMerchantUsersTable).Find(ctx, query)
 
 	if err != nil {
 		zap.L().Error(
@@ -348,7 +434,8 @@ func (h *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId str
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &users)
+	var list []*models.MgoUserRole
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -360,7 +447,22 @@ func (h *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId str
 		return nil, err
 	}
 
-	err = h.cache.Set(fmt.Sprintf(cacheUserMerchants, userId), users, 0)
+	objs := make([]*billingpb.UserRole, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.UserRole)
+	}
+
+	err = r.cache.Set(fmt.Sprintf(cacheUserMerchants, userId), objs, 0)
 
 	if err != nil {
 		zap.L().Error(
@@ -368,17 +470,15 @@ func (h *userRoleRepository) GetMerchantsForUser(ctx context.Context, userId str
 			zap.Error(err),
 			zap.Any(pkg.ErrorCacheFieldCmd, "set"),
 			zap.Any(pkg.ErrorCacheFieldKey, cacheUserMerchants),
-			zap.Any(pkg.ErrorCacheFieldData, users),
+			zap.Any(pkg.ErrorCacheFieldData, objs),
 		)
 	}
 
-	return users, nil
+	return objs, nil
 }
 
-func (h *userRoleRepository) GetUsersForAdmin(ctx context.Context) ([]*billingpb.UserRole, error) {
-	var users []*billingpb.UserRole
-
-	cursor, err := h.db.Collection(collectionAdminUsersTable).Find(ctx, bson.M{})
+func (r *userRoleRepository) GetUsersForAdmin(ctx context.Context) ([]*billingpb.UserRole, error) {
+	cursor, err := r.db.Collection(collectionAdminUsersTable).Find(ctx, bson.M{})
 
 	if err != nil {
 		zap.L().Error(
@@ -390,7 +490,8 @@ func (h *userRoleRepository) GetUsersForAdmin(ctx context.Context) ([]*billingpb
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &users)
+	var list []*models.MgoUserRole
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -401,12 +502,25 @@ func (h *userRoleRepository) GetUsersForAdmin(ctx context.Context) ([]*billingpb
 		return nil, err
 	}
 
-	return users, nil
+	objs := make([]*billingpb.UserRole, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.UserRole)
+	}
+
+	return objs, nil
 }
 
-func (h *userRoleRepository) GetUsersForMerchant(ctx context.Context, merchantId string) ([]*billingpb.UserRole, error) {
-	var users []*billingpb.UserRole
-
+func (r *userRoleRepository) GetUsersForMerchant(ctx context.Context, merchantId string) ([]*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(merchantId)
 
 	if err != nil {
@@ -420,7 +534,7 @@ func (h *userRoleRepository) GetUsersForMerchant(ctx context.Context, merchantId
 	}
 
 	query := bson.M{"merchant_id": oid}
-	cursor, err := h.db.Collection(collectionMerchantUsersTable).Find(ctx, query)
+	cursor, err := r.db.Collection(collectionMerchantUsersTable).Find(ctx, query)
 
 	if err != nil {
 		zap.L().Error(
@@ -433,7 +547,8 @@ func (h *userRoleRepository) GetUsersForMerchant(ctx context.Context, merchantId
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &users)
+	var list []*models.MgoUserRole
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -445,14 +560,29 @@ func (h *userRoleRepository) GetUsersForMerchant(ctx context.Context, merchantId
 		return nil, err
 	}
 
-	return users, nil
+	objs := make([]*billingpb.UserRole, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.UserRole)
+	}
+
+	return objs, nil
 }
 
-func (h *userRoleRepository) GetAdminUserByEmail(ctx context.Context, email string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
+func (r *userRoleRepository) GetAdminUserByEmail(ctx context.Context, email string) (*billingpb.UserRole, error) {
+	var mgo = models.MgoUserRole{}
 
 	query := bson.M{"email": email}
-	err := h.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&user)
+	err := r.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -464,12 +594,21 @@ func (h *userRoleRepository) GetAdminUserByEmail(ctx context.Context, email stri
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetMerchantUserByEmail(ctx context.Context, merchantId string, email string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
-
+func (r *userRoleRepository) GetMerchantUserByEmail(ctx context.Context, merchantId string, email string) (*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(merchantId)
 
 	if err != nil {
@@ -482,22 +621,34 @@ func (h *userRoleRepository) GetMerchantUserByEmail(ctx context.Context, merchan
 		return nil, err
 	}
 
+	var mgo = models.MgoUserRole{}
 	filter := bson.M{"merchant_id": oid, "email": email}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOne(ctx, filter).Decode(&user)
+	err = r.db.Collection(collectionMerchantUsersTable).FindOne(ctx, filter).Decode(&mgo)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetAdminUserByUserId(ctx context.Context, userId string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
+func (r *userRoleRepository) GetAdminUserByUserId(ctx context.Context, userId string) (*billingpb.UserRole, error) {
+	var mgo = models.MgoUserRole{}
 
 	oid, _ := primitive.ObjectIDFromHex(userId)
 	query := bson.M{"user_id": oid}
-	err := h.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&user)
+	err := r.db.Collection(collectionAdminUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -509,12 +660,21 @@ func (h *userRoleRepository) GetAdminUserByUserId(ctx context.Context, userId st
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
 
-func (h *userRoleRepository) GetMerchantUserByUserId(ctx context.Context, merchantId string, id string) (*billingpb.UserRole, error) {
-	var user *billingpb.UserRole
-
+func (r *userRoleRepository) GetMerchantUserByUserId(ctx context.Context, merchantId string, id string) (*billingpb.UserRole, error) {
 	oid, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
@@ -539,8 +699,9 @@ func (h *userRoleRepository) GetMerchantUserByUserId(ctx context.Context, mercha
 		return nil, err
 	}
 
+	var mgo = models.MgoUserRole{}
 	query := bson.M{"merchant_id": merchantOid, "user_id": oid}
-	err = h.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&user)
+	err = r.db.Collection(collectionMerchantUsersTable).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -552,5 +713,16 @@ func (h *userRoleRepository) GetMerchantUserByUserId(ctx context.Context, mercha
 		return nil, err
 	}
 
-	return user, nil
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	return obj.(*billingpb.UserRole), nil
 }
