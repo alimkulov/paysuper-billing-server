@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
 	pkg2 "github.com/paysuper/paysuper-billing-server/internal/pkg"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -30,7 +31,7 @@ type royaltyReportRepository repository
 // NewRoyaltyReportRepository create and return an object for working with the royalty report repository.
 // The returned object implements the RoyaltyReportRepositoryInterface interface.
 func NewRoyaltyReportRepository(db mongodb.SourceInterface, cache database.CacheInterface) RoyaltyReportRepositoryInterface {
-	s := &royaltyReportRepository{db: db, cache: cache}
+	s := &royaltyReportRepository{db: db, cache: cache, mapper: models.NewRoyaltyReportMapper()}
 	return s
 }
 
@@ -77,7 +78,8 @@ func (r *royaltyReportRepository) GetNonPayoutReports(
 		return
 	}
 
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -88,6 +90,23 @@ func (r *royaltyReportRepository) GetNonPayoutReports(
 		)
 		return
 	}
+
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	result = objs
 
 	return
 }
@@ -112,7 +131,8 @@ func (r *royaltyReportRepository) GetByPayoutId(ctx context.Context, payoutId st
 		return
 	}
 
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -124,6 +144,23 @@ func (r *royaltyReportRepository) GetByPayoutId(ctx context.Context, payoutId st
 		)
 		return
 	}
+
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	result = objs
 
 	return
 }
@@ -140,8 +177,8 @@ func (r *royaltyReportRepository) GetAll(ctx context.Context) ([]*billingpb.Roya
 		return nil, err
 	}
 
-	result := []*billingpb.RoyaltyReport{}
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -152,7 +189,22 @@ func (r *royaltyReportRepository) GetAll(ctx context.Context) ([]*billingpb.Roya
 		return nil, err
 	}
 
-	return result, nil
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	return objs, nil
 }
 
 func (r *royaltyReportRepository) GetByPeriod(ctx context.Context, from, to time.Time) ([]*billingpb.RoyaltyReport, error) {
@@ -169,8 +221,8 @@ func (r *royaltyReportRepository) GetByPeriod(ctx context.Context, from, to time
 		return nil, err
 	}
 
-	result := []*billingpb.RoyaltyReport{}
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -182,7 +234,22 @@ func (r *royaltyReportRepository) GetByPeriod(ctx context.Context, from, to time
 		return nil, err
 	}
 
-	return result, nil
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	return objs, nil
 }
 
 func (r *royaltyReportRepository) GetByAcceptedExpireWithStatus(
@@ -205,8 +272,8 @@ func (r *royaltyReportRepository) GetByAcceptedExpireWithStatus(
 		return nil, err
 	}
 
-	result := []*billingpb.RoyaltyReport{}
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -218,7 +285,22 @@ func (r *royaltyReportRepository) GetByAcceptedExpireWithStatus(
 		return nil, err
 	}
 
-	return result, nil
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	return objs, nil
 }
 
 func (r *royaltyReportRepository) GetRoyaltyHistoryById(ctx context.Context, id string) ([]*billingpb.RoyaltyReportChanges, error) {
@@ -248,8 +330,8 @@ func (r *royaltyReportRepository) GetRoyaltyHistoryById(ctx context.Context, id 
 		return nil, err
 	}
 
-	result := []*billingpb.RoyaltyReportChanges{}
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReportChanges
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -261,7 +343,22 @@ func (r *royaltyReportRepository) GetRoyaltyHistoryById(ctx context.Context, id 
 		return nil, err
 	}
 
-	return result, nil
+	objs := make([]*billingpb.RoyaltyReportChanges, len(list))
+
+	for i, obj := range list {
+		v, err := models.NewRoyaltyReportChangesMapper().MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReportChanges)
+	}
+
+	return objs, nil
 }
 
 func (r *royaltyReportRepository) FindByMerchantStatusDates(
@@ -314,8 +411,8 @@ func (r *royaltyReportRepository) FindByMerchantStatusDates(
 		return nil, err
 	}
 
-	result := []*billingpb.RoyaltyReport{}
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoRoyaltyReport
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -327,7 +424,22 @@ func (r *royaltyReportRepository) FindByMerchantStatusDates(
 		return nil, err
 	}
 
-	return result, nil
+	objs := make([]*billingpb.RoyaltyReport, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.RoyaltyReport)
+	}
+
+	return objs, nil
 }
 
 func (r *royaltyReportRepository) FindCountByMerchantStatusDates(
@@ -479,13 +591,14 @@ func (r *royaltyReportRepository) GetReportExists(
 		return nil
 	}
 
+	var mgo = models.MgoRoyaltyReport{}
 	query := bson.M{
 		"merchant_id": oid,
 		"period_from": bson.M{"$gte": from},
 		"period_to":   bson.M{"$lte": to},
 		"currency":    currency,
 	}
-	err = r.db.Collection(CollectionRoyaltyReport).FindOne(ctx, query).Decode(&report)
+	err = r.db.Collection(CollectionRoyaltyReport).FindOne(ctx, query).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -497,11 +610,33 @@ func (r *royaltyReportRepository) GetReportExists(
 		return nil
 	}
 
-	return report
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil
+	}
+
+	return obj.(*billingpb.RoyaltyReport)
 }
 
 func (r *royaltyReportRepository) Insert(ctx context.Context, rr *billingpb.RoyaltyReport, ip, source string) (err error) {
-	_, err = r.db.Collection(CollectionRoyaltyReport).InsertOne(ctx, rr)
+	mgo, err := r.mapper.MapObjectToMgo(rr)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, rr),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(CollectionRoyaltyReport).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -546,8 +681,19 @@ func (r *royaltyReportRepository) Update(ctx context.Context, rr *billingpb.Roya
 		return nil
 	}
 
+	mgo, err := r.mapper.MapObjectToMgo(rr)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, rr),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	_, err = r.db.Collection(CollectionRoyaltyReport).ReplaceOne(ctx, filter, rr)
+	_, err = r.db.Collection(CollectionRoyaltyReport).ReplaceOne(ctx, filter, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -555,7 +701,7 @@ func (r *royaltyReportRepository) Update(ctx context.Context, rr *billingpb.Roya
 			zap.Error(err),
 			zap.String(pkg.ErrorDatabaseFieldCollection, CollectionRoyaltyReport),
 			zap.String(pkg.ErrorDatabaseFieldOperation, pkg.ErrorDatabaseFieldOperationUpdate),
-			zap.Any(pkg.ErrorDatabaseFieldDocument, rr),
+			zap.Any(pkg.ErrorDatabaseFieldDocument, mgo),
 		)
 
 		return err
@@ -600,10 +746,10 @@ func (r *royaltyReportRepository) UpdateMany(ctx context.Context, query bson.M, 
 }
 
 func (r *royaltyReportRepository) GetById(ctx context.Context, id string) (rr *billingpb.RoyaltyReport, err error) {
-	var c billingpb.RoyaltyReport
+	var c = billingpb.RoyaltyReport{}
 	key := fmt.Sprintf(cacheKeyRoyaltyReport, id)
 
-	if err := r.cache.Get(key, c); err == nil {
+	if err := r.cache.Get(key, &c); err == nil {
 		return &c, nil
 	}
 
@@ -619,8 +765,9 @@ func (r *royaltyReportRepository) GetById(ctx context.Context, id string) (rr *b
 		return
 	}
 
+	var mgo = models.MgoRoyaltyReport{}
 	filter := bson.M{"_id": oid}
-	err = r.db.Collection(CollectionRoyaltyReport).FindOne(ctx, filter).Decode(&rr)
+	err = r.db.Collection(CollectionRoyaltyReport).FindOne(ctx, filter).Decode(&mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -631,6 +778,19 @@ func (r *royaltyReportRepository) GetById(ctx context.Context, id string) (rr *b
 		)
 		return
 	}
+
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	rr = obj.(*billingpb.RoyaltyReport)
 
 	if err = r.cache.Set(key, rr, 0); err != nil {
 		zap.L().Error(
@@ -673,7 +833,18 @@ func (r *royaltyReportRepository) onRoyaltyReportChange(
 	hash.Write(b)
 	change.Hash = hex.EncodeToString(hash.Sum(nil))
 
-	_, err = r.db.Collection(CollectionRoyaltyReportChanges).InsertOne(ctx, change)
+	mgo, err := models.NewRoyaltyReportChangesMapper().MapObjectToMgo(change)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, change),
+		)
+		return err
+	}
+
+	_, err = r.db.Collection(CollectionRoyaltyReportChanges).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -681,7 +852,7 @@ func (r *royaltyReportRepository) onRoyaltyReportChange(
 			zap.Error(err),
 			zap.String(pkg.ErrorDatabaseFieldCollection, CollectionRoyaltyReportChanges),
 			zap.String(pkg.ErrorDatabaseFieldOperation, pkg.ErrorDatabaseFieldOperationInsert),
-			zap.Any(pkg.ErrorDatabaseFieldDocument, change),
+			zap.Any(pkg.ErrorDatabaseFieldDocument, mgo),
 		)
 		return
 	}
