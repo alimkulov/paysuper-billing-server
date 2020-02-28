@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
 	"github.com/paysuper/paysuper-billing-server/internal/helper"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	tools "github.com/paysuper/paysuper-tools/number"
@@ -31,12 +32,23 @@ type countryRepository repository
 // NewCountryRepository create and return an object for working with the country repository.
 // The returned object implements the CountryRepositoryInterface interface.
 func NewCountryRepository(db mongodb.SourceInterface, cache database.CacheInterface) CountryRepositoryInterface {
-	s := &countryRepository{db: db, cache: cache}
+	s := &countryRepository{db: db, cache: cache, mapper: models.NewCountryMapper()}
 	return s
 }
 
 func (h *countryRepository) Insert(ctx context.Context, country *billingpb.Country) error {
-	_, err := h.db.Collection(CollectionCountry).InsertOne(ctx, country)
+	mgo, err := h.mapper.MapObjectToMgo(country)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, country),
+		)
+		return err
+	}
+
+	_, err = h.db.Collection(CollectionCountry).InsertOne(ctx, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -72,7 +84,17 @@ func (h *countryRepository) MultipleInsert(ctx context.Context, country []*billi
 		}
 		v.VatThreshold.Year = tools.FormatAmount(v.VatThreshold.Year)
 		v.VatThreshold.World = tools.FormatAmount(v.VatThreshold.World)
-		c[i] = v
+		mgo, err := h.mapper.MapObjectToMgo(v)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, v),
+			)
+			return err
+		}
+		c[i] = mgo
 	}
 
 	_, err := h.db.Collection(CollectionCountry).InsertMany(ctx, c)
@@ -116,7 +138,18 @@ func (h *countryRepository) Update(ctx context.Context, country *billingpb.Count
 		return err
 	}
 
-	_, err = h.db.Collection(CollectionCountry).ReplaceOne(ctx, bson.M{"_id": oid}, country)
+	mgo, err := h.mapper.MapObjectToMgo(country)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, country),
+		)
+		return err
+	}
+
+	_, err = h.db.Collection(CollectionCountry).ReplaceOne(ctx, bson.M{"_id": oid}, mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -142,15 +175,17 @@ func (h *countryRepository) Update(ctx context.Context, country *billingpb.Count
 }
 
 func (h *countryRepository) GetByIsoCodeA2(ctx context.Context, code string) (*billingpb.Country, error) {
-	var c billingpb.Country
+	c := &billingpb.Country{}
 	var key = fmt.Sprintf(cacheCountryCodeA2, code)
 
 	if err := h.cache.Get(key, c); err == nil {
-		return &c, nil
+		return c, nil
 	}
 
+
+	mgo := &models.MgoCountry{}
 	query := bson.M{"iso_code_a2": code}
-	err := h.db.Collection(CollectionCountry).FindOne(ctx, query).Decode(&c)
+	err := h.db.Collection(CollectionCountry).FindOne(ctx, query).Decode(mgo)
 
 	if err != nil {
 		zap.L().Error(
@@ -162,6 +197,17 @@ func (h *countryRepository) GetByIsoCodeA2(ctx context.Context, code string) (*b
 		return nil, err
 	}
 
+	obj, err := h.mapper.MapMgoToObject(mgo)
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+		)
+		return nil, err
+	}
+	c = obj.(*billingpb.Country)
+
 	if err = h.cache.Set(key, c, 0); err != nil {
 		zap.L().Error(
 			pkg.ErrorCacheQueryFailed,
@@ -172,7 +218,7 @@ func (h *countryRepository) GetByIsoCodeA2(ctx context.Context, code string) (*b
 		)
 	}
 
-	return &c, nil
+	return c, nil
 }
 
 func (h *countryRepository) FindByVatEnabled(ctx context.Context) (*billingpb.CountriesList, error) {
@@ -202,7 +248,8 @@ func (h *countryRepository) FindByVatEnabled(ctx context.Context) (*billingpb.Co
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &c.Countries)
+	var mgoCountries []*models.MgoCountry
+	err = cursor.All(ctx, &mgoCountries)
 
 	if err != nil {
 		zap.L().Error(
@@ -212,6 +259,21 @@ func (h *countryRepository) FindByVatEnabled(ctx context.Context) (*billingpb.Co
 			zap.Any(pkg.ErrorDatabaseFieldQuery, query),
 		)
 		return nil, err
+	}
+
+	c.Countries = make([]*billingpb.Country, len(mgoCountries))
+	for i, country := range mgoCountries {
+		obj, err := h.mapper.MapMgoToObject(country)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, country),
+			)
+			return nil, err
+		}
+		c.Countries[i] = obj.(*billingpb.Country)
 	}
 
 	if err = h.cache.Set(key, c, 0); err != nil {
@@ -249,7 +311,8 @@ func (h *countryRepository) GetAll(ctx context.Context) (*billingpb.CountriesLis
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &c.Countries)
+	var mgoCountries []*models.MgoCountry
+	err = cursor.All(ctx, &mgoCountries)
 
 	if err != nil {
 		zap.L().Error(
@@ -260,6 +323,22 @@ func (h *countryRepository) GetAll(ctx context.Context) (*billingpb.CountriesLis
 		)
 		return nil, err
 	}
+
+	c.Countries = make([]*billingpb.Country, len(mgoCountries))
+	for i, country := range mgoCountries {
+		obj, err := h.mapper.MapMgoToObject(country)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, country),
+			)
+			return nil, err
+		}
+		c.Countries[i] = obj.(*billingpb.Country)
+	}
+
 
 	if err = h.cache.Set(key, c, 0); err != nil {
 		zap.L().Error(
@@ -303,7 +382,8 @@ func (h *countryRepository) FindByHighRisk(ctx context.Context, isHighRiskOrder 
 		return nil, err
 	}
 
-	err = cursor.All(ctx, &c.Countries)
+	var mgoCountries []*models.MgoCountry
+	err = cursor.All(ctx, &mgoCountries)
 
 	if err != nil {
 		zap.L().Error(
@@ -313,6 +393,21 @@ func (h *countryRepository) FindByHighRisk(ctx context.Context, isHighRiskOrder 
 			zap.Any(pkg.ErrorDatabaseFieldQuery, query),
 		)
 		return nil, err
+	}
+
+	c.Countries = make([]*billingpb.Country, len(mgoCountries))
+	for i, country := range mgoCountries {
+		obj, err := h.mapper.MapMgoToObject(country)
+
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, country),
+			)
+			return nil, err
+		}
+		c.Countries[i] = obj.(*billingpb.Country)
 	}
 
 	if err = h.cache.Set(key, c, 0); err != nil {

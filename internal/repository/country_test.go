@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/paysuper/paysuper-billing-server/internal/config"
 	"github.com/paysuper/paysuper-billing-server/internal/mocks"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -39,7 +40,7 @@ func (suite *CountryTestSuite) SetupTest() {
 	suite.db, err = mongodb.NewDatabase()
 	assert.NoError(suite.T(), err, "Database connection failed")
 
-	suite.repository = &countryRepository{db: suite.db, cache: &mocks.CacheInterface{}}
+	suite.repository = &countryRepository{db: suite.db, cache: &mocks.CacheInterface{}, mapper: models.NewCountryMapper()}
 }
 
 func (suite *CountryTestSuite) TearDownTest() {
@@ -247,7 +248,7 @@ func (suite *CountryTestSuite) TestCountry_GetByIsoCodeA2_SkipGetByCacheError() 
 	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
 	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
 	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
-	cache.On("Get", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), billingpb.Country{}).Return(errors.New("error"))
+	cache.On("Get", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), mock.Anything).Return(errors.New("error"))
 	cache.On("Set", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), mock.Anything, time.Duration(0)).Times(2).Return(nil)
 	suite.repository.cache = cache
 
@@ -263,7 +264,7 @@ func (suite *CountryTestSuite) TestCountry_GetByIsoCodeA2_ReturnByCache() {
 	country := suite.getCountryTemplate()
 
 	cache := &mocks.CacheInterface{}
-	cache.On("Get", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), billingpb.Country{}).Return(nil)
+	cache.On("Get", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), mock.Anything).Return(nil)
 	suite.repository.cache = cache
 
 	country2, err := suite.repository.GetByIsoCodeA2(context.TODO(), country.IsoCodeA2)
@@ -281,8 +282,8 @@ func (suite *CountryTestSuite) TestCountry_GetByIsoCodeA2_SkipSetToCacheError() 
 	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
 	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
 	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
-	cache.On("Get", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), billingpb.Country{}).Return(errors.New("error"))
-	cache.On("Set", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), mock.Anything, time.Duration(0)).Times(2).Return(errors.New("error"))
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Times(2).Return(errors.New("error"))
 	suite.repository.cache = cache
 
 	err := suite.repository.Insert(context.TODO(), country)
@@ -291,6 +292,34 @@ func (suite *CountryTestSuite) TestCountry_GetByIsoCodeA2_SkipSetToCacheError() 
 	country2, err := suite.repository.GetByIsoCodeA2(context.TODO(), country.IsoCodeA2)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), country.Id, country2.Id)
+}
+
+
+func (suite *CountryTestSuite) TestCountry_GetByIsoCodeA2_MapError() {
+	country := suite.getCountryTemplate()
+
+	cache := &mocks.CacheInterface{}
+	cache.On("Set", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), country, time.Duration(0)).Times(1).Return(nil)
+	cache.On("Delete", cacheCountryAll).Return(nil)
+	cache.On("Delete", cacheCountryRegions).Return(nil)
+	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Times(2).Return(errors.New("error"))
+	suite.repository.cache = cache
+
+	err := suite.repository.Insert(context.TODO(), country)
+	assert.NoError(suite.T(), err)
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(nil, errors.New("error"))
+	suite.repository.mapper = mapper
+
+	country2, err := suite.repository.GetByIsoCodeA2(context.TODO(), country.IsoCodeA2)
+	assert.Error(suite.T(), err)
+	assert.Nil(suite.T(), country2)
 }
 
 func (suite *CountryTestSuite) TestCountry_FindByVatEnabled_ReturnByCache() {
@@ -305,13 +334,44 @@ func (suite *CountryTestSuite) TestCountry_FindByVatEnabled_ReturnByCache() {
 
 func (suite *CountryTestSuite) TestCountry_FindByVatEnabled_ErrorSetCache() {
 	cache := &mocks.CacheInterface{}
-	cache.On("Get", cacheCountriesWithVatEnabled, &billingpb.CountriesList{}).Return(errors.New("error"))
-	cache.On("Set", cacheCountriesWithVatEnabled, &billingpb.CountriesList{}, time.Duration(0)).Return(errors.New("error"))
+	cache.On("Get", cacheCountriesWithVatEnabled, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", cacheCountriesWithVatEnabled, mock.Anything, time.Duration(0)).Return(errors.New("error"))
 	suite.repository.cache = cache
 
 	list, err := suite.repository.FindByVatEnabled(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.IsType(suite.T(), &billingpb.CountriesList{}, list)
+}
+
+func (suite *CountryTestSuite) TestCountry_FindByVatEnabled_MapError() {
+	country := suite.getCountryTemplate()
+	country.VatPeriodMonth = 3
+	country.VatEnabled = true
+	country.VatCurrencyRatesPolicy = "test"
+
+	cache := &mocks.CacheInterface{}
+	cache.On("Set", mock.Anything, country, time.Duration(0)).Return(nil)
+	cache.On("Delete", cacheCountryAll).Return(nil)
+	cache.On("Delete", cacheCountryRegions).Return(nil)
+	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Return(nil)
+	suite.repository.cache = cache
+
+	err := suite.repository.Insert(context.TODO(), country)
+	assert.NoError(suite.T(), err)
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(nil, errors.New("error"))
+
+	suite.repository.mapper = mapper
+
+	list, err := suite.repository.FindByVatEnabled(context.TODO())
+	assert.Error(suite.T(), err)
+	assert.Nil(suite.T(), list)
 }
 
 func (suite *CountryTestSuite) TestCountry_FindByVatEnabled_SkipVatDisable() {
@@ -444,13 +504,43 @@ func (suite *CountryTestSuite) TestCountry_GetAll_ReturnByCache() {
 
 func (suite *CountryTestSuite) TestCountry_GetAll_ErrorSetCache() {
 	cache := &mocks.CacheInterface{}
-	cache.On("Get", cacheCountryAll, &billingpb.CountriesList{}).Return(errors.New("error"))
-	cache.On("Set", cacheCountryAll, &billingpb.CountriesList{}, time.Duration(0)).Return(errors.New("error"))
+	cache.On("Get", cacheCountryAll, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", cacheCountryAll, mock.Anything, time.Duration(0)).Return(errors.New("error"))
 	suite.repository.cache = cache
 
 	list, err := suite.repository.GetAll(context.TODO())
 	assert.NoError(suite.T(), err)
 	assert.IsType(suite.T(), &billingpb.CountriesList{}, list)
+}
+
+func (suite *CountryTestSuite) TestCountry_GetAll_MapError() {
+	country := suite.getCountryTemplate()
+	country.PaymentsAllowed = false
+	country.HighRiskPaymentsAllowed = true
+
+	cache := &mocks.CacheInterface{}
+	cache.On("Set", mock.Anything, country, time.Duration(0)).Return(nil)
+	cache.On("Delete", cacheCountryAll).Return(nil)
+	cache.On("Delete", cacheCountryRegions).Return(nil)
+	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
+	cache.On("Get", mock.Anything, mock.Anything).Return(errors.New("error"))
+	cache.On("Set", mock.Anything, mock.Anything, time.Duration(0)).Return(nil)
+	suite.repository.cache = cache
+
+	err := suite.repository.Insert(context.TODO(), country)
+	assert.NoError(suite.T(), err)
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(nil, errors.New("error"))
+
+	suite.repository.mapper = mapper
+
+	list, err := suite.repository.GetAll(context.TODO())
+	assert.Error(suite.T(), err)
+	assert.Nil(suite.T(), list)
 }
 
 func (suite *CountryTestSuite) TestCountry_GetAll_EmptyList() {
@@ -500,13 +590,45 @@ func (suite *CountryTestSuite) TestCountry_FindByHighRisk_ReturnByCache() {
 func (suite *CountryTestSuite) TestCountry_FindByHighRisk_ErrorSetCache() {
 	isHighRiskOrder := true
 	cache := &mocks.CacheInterface{}
-	cache.On("Get", fmt.Sprintf(cacheCountryRisk, isHighRiskOrder), &billingpb.CountriesList{}).Return(errors.New("error"))
-	cache.On("Set", fmt.Sprintf(cacheCountryRisk, isHighRiskOrder), &billingpb.CountriesList{}, time.Duration(0)).Return(errors.New("error"))
+	cache.On("Get", fmt.Sprintf(cacheCountryRisk, isHighRiskOrder), mock.Anything).Return(errors.New("error"))
+	cache.On("Set", fmt.Sprintf(cacheCountryRisk, isHighRiskOrder), mock.Anything, time.Duration(0)).Return(errors.New("error"))
 	suite.repository.cache = cache
 
 	list, err := suite.repository.FindByHighRisk(context.TODO(), isHighRiskOrder)
 	assert.NoError(suite.T(), err)
 	assert.IsType(suite.T(), &billingpb.CountriesList{}, list)
+}
+
+func (suite *CountryTestSuite) TestCountry_FindByHighRisk_MapError() {
+	country := suite.getCountryTemplate()
+	country.PaymentsAllowed = false
+	country.HighRiskPaymentsAllowed = true
+
+	cache := &mocks.CacheInterface{}
+	cache.On("Set", fmt.Sprintf(cacheCountryCodeA2, country.IsoCodeA2), country, time.Duration(0)).Return(nil)
+	cache.On("Delete", cacheCountryAll).Return(nil)
+	cache.On("Delete", cacheCountryRegions).Return(nil)
+	cache.On("Delete", cacheCountriesWithVatEnabled).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, false)).Return(nil)
+	cache.On("Delete", fmt.Sprintf(cacheCountryRisk, true)).Return(nil)
+	cache.On("Get", fmt.Sprintf(cacheCountryRisk, true), mock.Anything).Return(errors.New("error"))
+	cache.On("Set", fmt.Sprintf(cacheCountryRisk, true), mock.Anything, time.Duration(0)).Return(nil)
+	suite.repository.cache = cache
+
+	err := suite.repository.Insert(context.TODO(), country)
+	assert.NoError(suite.T(), err)
+
+	isHighRiskOrder := true
+
+	mapper := &mocks.Mapper{}
+	mapper.On("MapMgoToObject", mock.Anything).Return(nil, errors.New("error"))
+	mapper.On("MapObjectToMgo", mock.Anything).Return(nil, errors.New("error"))
+
+	suite.repository.mapper = mapper
+
+	list, err := suite.repository.FindByHighRisk(context.TODO(), isHighRiskOrder)
+	assert.Error(suite.T(), err)
+	assert.Nil(suite.T(), list)
 }
 
 func (suite *CountryTestSuite) TestCountry_FindByHighRisk_NotEmptyListHighRisk() {
