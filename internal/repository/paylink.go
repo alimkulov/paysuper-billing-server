@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -63,7 +64,7 @@ func (r *paylinkRepository) Insert(ctx context.Context, pl *billingpb.Paylink) e
 func (r *paylinkRepository) Update(ctx context.Context, pl *billingpb.Paylink) error {
 	pl.IsExpired = pl.IsPaylinkExpired()
 
-	plMgo, err := pl.GetMgoPaylink()
+	obj, err := models.NewPayLinkMapperMapper().MapObjectToMgo(pl)
 
 	if err != nil {
 		zap.S().Error(
@@ -74,6 +75,7 @@ func (r *paylinkRepository) Update(ctx context.Context, pl *billingpb.Paylink) e
 		return err
 	}
 
+	plMgo := obj.(*models.MgoPaylink)
 	query := bson.M{"_id": plMgo.Id}
 
 	set := bson.M{"$set": bson.M{
@@ -138,7 +140,7 @@ func (r *paylinkRepository) Delete(ctx context.Context, obj *billingpb.Paylink) 
 }
 
 func (r *paylinkRepository) UpdateTotalStat(ctx context.Context, pl *billingpb.Paylink) error {
-	plMgo, err := pl.GetMgoPaylink()
+	obj, err := models.NewPayLinkMapperMapper().MapObjectToMgo(pl)
 
 	if err != nil {
 		zap.S().Error(
@@ -149,6 +151,7 @@ func (r *paylinkRepository) UpdateTotalStat(ctx context.Context, pl *billingpb.P
 		return err
 	}
 
+	plMgo := obj.(*models.MgoPaylink)
 	query := bson.M{"_id": plMgo.Id}
 
 	set := bson.M{"$set": bson.M{

@@ -615,7 +615,7 @@ func (s *Service) PaymentFormJsonDataProcess(
 	}
 
 	loc, _ := s.getCountryFromAcceptLanguage(req.Locale)
-	isIdentified := order.User.IsIdentified()
+	isIdentified := helper.IsIdentified(order.User.Id)
 	browserCustomer := &BrowserCookieCustomer{
 		Ip:             req.Ip,
 		UserAgent:      req.UserAgent,
@@ -1274,7 +1274,7 @@ func (s *Service) PaymentFormLanguageChanged(
 		return nil
 	}
 
-	if order.User.IsIdentified() == true {
+	if helper.IsIdentified(order.User.Id) == true {
 		s.updateCustomerFromRequestLocale(ctx, order, req.Ip, req.AcceptLanguage, req.UserAgent, req.Lang)
 	}
 
@@ -3072,7 +3072,7 @@ func (v *PaymentCreateProcessor) processPaymentFormData(ctx context.Context) err
 		return orderCountryPaymentRestrictedError
 	}
 
-	if order.User.IsIdentified() == true {
+	if helper.IsIdentified(order.User.Id) == true {
 		customer, err := v.service.updateCustomerFromRequest(ctx, order, updCustomerReq, v.ip, v.acceptLanguage, v.userAgent)
 
 		if err != nil {
@@ -3919,7 +3919,7 @@ func (s *Service) SetUserNotifySales(
 		return err
 	}
 
-	if order.User.IsIdentified() == true {
+	if helper.IsIdentified(order.User.Id) == true {
 		customer, err := s.getCustomerById(ctx, order.User.Id)
 		if err != nil {
 			return err
@@ -3989,7 +3989,7 @@ func (s *Service) SetUserNotifyNewRegion(
 		return err
 	}
 
-	if order.User.IsIdentified() == true {
+	if helper.IsIdentified(order.User.Id) == true {
 		customer, err := s.getCustomerById(ctx, order.User.Id)
 		if err != nil {
 			return err
