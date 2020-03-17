@@ -5,47 +5,6 @@ import (
 	tools "github.com/paysuper/paysuper-tools/number"
 )
 
-type dashboardAmountItemWithChartMapper struct{}
-
-func NewDashboardAmountItemWithChartMapper() Mapper {
-	return &dashboardAmountItemWithChartMapper{}
-}
-
-type MgoGrossRevenueAndVatReports struct {
-	GrossRevenue *MgoDashboardAmountItemWithChart
-	Vat          *MgoDashboardAmountItemWithChart
-}
-
-type MgoDashboardAmountItemWithChart struct {
-	Amount   float64                              `bson:"amount"`
-	Currency string                               `bson:"currency"`
-	Chart    []*billingpb.DashboardChartItemFloat `bson:"chart"`
-}
-
-func (m *dashboardAmountItemWithChartMapper) MapObjectToMgo(obj interface{}) (interface{}, error) {
-	panic("Implement me!")
-	return nil, nil
-}
-
-func (m *dashboardAmountItemWithChartMapper) MapMgoToObject(obj interface{}) (interface{}, error) {
-	in := obj.(*MgoDashboardAmountItemWithChart)
-
-	out := &billingpb.DashboardAmountItemWithChart{
-		AmountCurrent: tools.FormatAmount(in.Amount),
-		Currency:      in.Currency,
-	}
-
-	for _, v := range in.Chart {
-		item := &billingpb.DashboardChartItemFloat{
-			Label: v.Label,
-			Value: tools.FormatAmount(v.Value),
-		}
-		out.Chart = append(out.Chart, item)
-	}
-
-	return out, nil
-}
-
 type dashboardRevenueDynamicReportItemMapper struct{}
 
 func NewDashboardRevenueDynamicReportItemMapper() Mapper {
@@ -77,6 +36,52 @@ func (m *dashboardRevenueDynamicReportItemMapper) MapMgoToObject(obj interface{}
 		Label:    in.Label,
 		Currency: in.Currency,
 		Count:    in.Count,
+	}
+
+	return out, nil
+}
+
+type MgoTotalTransactionsAndArpuReports struct {
+	TotalTransactions *billingpb.DashboardMainReportTotalTransactions `bson:"total_transactions"`
+	Arpu              *MgoDashboardAmountItemWithChart                `bson:"arpu"`
+}
+
+type MgoGrossRevenueAndVatReports struct {
+	GrossRevenue *MgoDashboardAmountItemWithChart `bson:"gross_revenue"`
+	Vat          *MgoDashboardAmountItemWithChart `bson:"vat"`
+}
+
+type MgoDashboardAmountItemWithChart struct {
+	Amount   float64                              `bson:"amount"`
+	Currency string                               `bson:"currency"`
+	Chart    []*billingpb.DashboardChartItemFloat `bson:"chart"`
+}
+
+type dashboardAmountItemWithChartMapper struct{}
+
+func NewDashboardAmountItemWithChartMapper() Mapper {
+	return &dashboardAmountItemWithChartMapper{}
+}
+
+func (m *dashboardAmountItemWithChartMapper) MapObjectToMgo(obj interface{}) (interface{}, error) {
+	panic("Implement me!")
+	return nil, nil
+}
+
+func (m *dashboardAmountItemWithChartMapper) MapMgoToObject(obj interface{}) (interface{}, error) {
+	in := obj.(*MgoDashboardAmountItemWithChart)
+
+	out := &billingpb.DashboardAmountItemWithChart{
+		AmountCurrent: tools.FormatAmount(in.Amount),
+		Currency:      in.Currency,
+	}
+
+	for _, v := range in.Chart {
+		item := &billingpb.DashboardChartItemFloat{
+			Label: v.Label,
+			Value: tools.FormatAmount(v.Value),
+		}
+		out.Chart = append(out.Chart, item)
 	}
 
 	return out, nil

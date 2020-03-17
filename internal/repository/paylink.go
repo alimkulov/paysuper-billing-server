@@ -26,7 +26,7 @@ type paylinkRepository repository
 // NewPaylinkRepository create and return an object for working with the paylink repository.
 // The returned object implements the PaylinkRepositoryInterface interface.
 func NewPaylinkRepository(db mongodb.SourceInterface, cache database.CacheInterface) PaylinkRepositoryInterface {
-	s := &paylinkRepository{db: db, cache: cache}
+	s := &paylinkRepository{db: db, cache: cache, mapper: models.NewPayLinkMapper()}
 	return s
 }
 
@@ -42,9 +42,22 @@ func (r *paylinkRepository) Insert(ctx context.Context, pl *billingpb.Paylink) e
 		)
 	}
 
+	obj, err := models.NewPayLinkMapper().MapObjectToMgo(pl)
+
+	if err != nil {
+		zap.S().Error(
+			pkg.MethodFinishedWithError,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldDocument, pl),
+		)
+		return err
+	}
+
+	plMgo := obj.(*models.MgoPaylink)
+
 	filter := bson.M{"_id": oid}
 	opts := options.FindOneAndReplace().SetUpsert(true)
-	err = r.db.Collection(collectionPaylinks).FindOneAndReplace(ctx, filter, pl, opts).Err()
+	err = r.db.Collection(collectionPaylinks).FindOneAndReplace(ctx, filter, plMgo, opts).Err()
 
 	if err != nil {
 		zap.S().Error(
@@ -64,7 +77,7 @@ func (r *paylinkRepository) Insert(ctx context.Context, pl *billingpb.Paylink) e
 func (r *paylinkRepository) Update(ctx context.Context, pl *billingpb.Paylink) error {
 	pl.IsExpired = pl.IsPaylinkExpired()
 
-	obj, err := models.NewPayLinkMapperMapper().MapObjectToMgo(pl)
+	obj, err := models.NewPayLinkMapper().MapObjectToMgo(pl)
 
 	if err != nil {
 		zap.S().Error(
@@ -120,8 +133,19 @@ func (r *paylinkRepository) Delete(ctx context.Context, obj *billingpb.Paylink) 
 		)
 	}
 
+	pl, err := models.NewPayLinkMapper().MapObjectToMgo(obj)
+
+	if err != nil {
+		zap.S().Error(
+			pkg.MethodFinishedWithError,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldDocument, obj),
+		)
+		return err
+	}
+
 	filter := bson.M{"_id": oid}
-	_, err = r.db.Collection(collectionPaylinks).ReplaceOne(ctx, filter, obj)
+	_, err = r.db.Collection(collectionPaylinks).ReplaceOne(ctx, filter, pl.(*models.MgoPaylink))
 
 	if err != nil {
 		zap.L().Error(
@@ -140,7 +164,7 @@ func (r *paylinkRepository) Delete(ctx context.Context, obj *billingpb.Paylink) 
 }
 
 func (r *paylinkRepository) UpdateTotalStat(ctx context.Context, pl *billingpb.Paylink) error {
-	obj, err := models.NewPayLinkMapperMapper().MapObjectToMgo(pl)
+	obj, err := models.NewPayLinkMapper().MapObjectToMgo(pl)
 
 	if err != nil {
 		zap.S().Error(
@@ -288,7 +312,8 @@ func (r *paylinkRepository) Find(ctx context.Context, merchantId string, project
 		return
 	}
 
-	err = cursor.All(ctx, &result)
+	var list []*models.MgoPaylink
+	err = cursor.All(ctx, &list)
 
 	if err != nil {
 		zap.L().Error(
@@ -299,6 +324,23 @@ func (r *paylinkRepository) Find(ctx context.Context, merchantId string, project
 		)
 		return
 	}
+
+	objs := make([]*billingpb.Paylink, len(list))
+
+	for i, obj := range list {
+		v, err := r.mapper.MapMgoToObject(obj)
+		if err != nil {
+			zap.L().Error(
+				pkg.ErrorDatabaseMapModelFailed,
+				zap.Error(err),
+				zap.Any(pkg.ErrorDatabaseFieldQuery, obj),
+			)
+			return nil, err
+		}
+		objs[i] = v.(*billingpb.Paylink)
+	}
+
+	result = objs
 
 	return
 }
@@ -324,7 +366,8 @@ func (r *paylinkRepository) getBy(ctx context.Context, key string, dbQuery bson.
 		return pl, nil
 	}
 
-	err = r.db.Collection(collectionPaylinks).FindOne(ctx, dbQuery).Decode(&pl)
+	var mgo = models.MgoPayoutDocument{}
+	err = r.db.Collection(collectionPaylinks).FindOne(ctx, dbQuery).Decode(&mgo)
 	if err != nil {
 		zap.L().Error(
 			pkg.ErrorDatabaseQueryFailed,
@@ -335,6 +378,18 @@ func (r *paylinkRepository) getBy(ctx context.Context, key string, dbQuery bson.
 		return
 	}
 
+	obj, err := r.mapper.MapMgoToObject(&mgo)
+
+	if err != nil {
+		zap.L().Error(
+			pkg.ErrorDatabaseMapModelFailed,
+			zap.Error(err),
+			zap.Any(pkg.ErrorDatabaseFieldQuery, mgo),
+		)
+		return nil, err
+	}
+
+	pl = obj.(*billingpb.Paylink)
 	pl.IsExpired = pl.GetIsExpired()
 
 	if pl.Deleted == false {

@@ -61,6 +61,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mongodb"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -521,7 +522,7 @@ func (suite *DashboardRepositoryTestSuite) Test_GetDashboardBaseReport_CurrentMo
 	assert.Zero(suite.T(), report.RevenueByCountry.TotalPrevious)
 	assert.NotEmpty(suite.T(), report.RevenueByCountry.Chart)
 	assert.Len(suite.T(), report.RevenueByCountry.Chart, iterations)
-
+	fmt.Println(report.RevenueByCountry.Top)
 	for _, v := range report.RevenueByCountry.Top {
 		assert.NotZero(suite.T(), v.Amount)
 		assert.NotZero(suite.T(), v.Country)

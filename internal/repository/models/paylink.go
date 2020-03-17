@@ -9,7 +9,7 @@ import (
 
 type payLinkMapper struct{}
 
-func NewPayLinkMapperMapper() Mapper {
+func NewPayLinkMapper() Mapper {
 	return &payLinkMapper{}
 }
 

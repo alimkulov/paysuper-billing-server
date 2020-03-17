@@ -8,6 +8,7 @@ import (
 	"github.com/jinzhu/now"
 	"github.com/paysuper/paysuper-billing-server/internal/database"
 	pkg2 "github.com/paysuper/paysuper-billing-server/internal/pkg"
+	"github.com/paysuper/paysuper-billing-server/internal/repository/models"
 	"github.com/paysuper/paysuper-billing-server/pkg"
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -73,7 +74,7 @@ func (r *dashboardRepository) GetMainReport(
 
 	dataGrossRevenueAndVatCurrent, err := processorGrossRevenueAndVatCurrent.ExecuteReport(
 		ctx,
-		new(pkg2.GrossRevenueAndVatReports),
+		new(models.MgoGrossRevenueAndVatReports),
 		processorGrossRevenueAndVatCurrent.ExecuteGrossRevenueAndVatReports,
 	)
 
@@ -94,7 +95,7 @@ func (r *dashboardRepository) GetMainReport(
 
 	dataGrossRevenueAndVatPrevious, err := processorGrossRevenueAndVatPrevious.ExecuteReport(
 		ctx,
-		new(pkg2.GrossRevenueAndVatReports),
+		new(models.MgoGrossRevenueAndVatReports),
 		processorGrossRevenueAndVatPrevious.ExecuteGrossRevenueAndVatReports,
 	)
 
@@ -115,7 +116,7 @@ func (r *dashboardRepository) GetMainReport(
 
 	dataTotalTransactionsAndArpuCurrent, err := processorTotalTransactionsAndArpuCurrent.ExecuteReport(
 		ctx,
-		new(pkg2.TotalTransactionsAndArpuReports),
+		new(models.MgoTotalTransactionsAndArpuReports),
 		processorTotalTransactionsAndArpuCurrent.ExecuteTotalTransactionsAndArpuReports,
 	)
 
@@ -136,7 +137,7 @@ func (r *dashboardRepository) GetMainReport(
 
 	dataTotalTransactionsAndArpuPrevious, err := processorTotalTransactionsAndArpuPrevious.ExecuteReport(
 		ctx,
-		new(pkg2.TotalTransactionsAndArpuReports),
+		new(models.MgoTotalTransactionsAndArpuReports),
 		processorTotalTransactionsAndArpuPrevious.ExecuteTotalTransactionsAndArpuReports,
 	)
 
@@ -226,7 +227,7 @@ func (r *dashboardRepository) GetRevenueDynamicsReport(
 
 	data, err := processor.ExecuteReport(
 		ctx,
-		new(billingpb.DashboardRevenueDynamicReport),
+		new(models.MgoDashboardRevenueDynamicReport),
 		processor.ExecuteRevenueDynamicReport,
 	)
 
@@ -271,7 +272,7 @@ func (r *dashboardRepository) getBaseRevenueByCountryReport(
 
 	dataCurrent, err := processorCurrent.ExecuteReport(
 		ctx,
-		new(billingpb.DashboardRevenueByCountryReport),
+		new(models.MgoDashboardRevenueByCountryReport),
 		processorCurrent.ExecuteRevenueByCountryReport,
 	)
 
@@ -281,7 +282,7 @@ func (r *dashboardRepository) getBaseRevenueByCountryReport(
 
 	dataPrevious, err := processorPrevious.ExecuteReport(
 		ctx,
-		new(billingpb.DashboardRevenueByCountryReport),
+		new(models.MgoDashboardRevenueByCountryReport),
 		processorPrevious.ExecuteRevenueByCountryReport,
 	)
 
