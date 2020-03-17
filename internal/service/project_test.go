@@ -1541,7 +1541,7 @@ func (suite *ProjectCRUDTestSuite) TestProjectCRUD_ChangeProject_NewProject_With
 	project, err := suite.service.project.GetById(context.TODO(), rsp.Item.Id)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), rsp.Item.RedirectSettings, project.RedirectSettings)
-	assert.Equal(suite.T(), project.RedirectSettings.Mode, pkg.ProjectRedirectModeAny)
+	assert.Equal(suite.T(), project.RedirectSettings.Mode, pkg.ProjectRedirectModeDisable)
 	assert.Equal(suite.T(), project.RedirectSettings.Usage, pkg.ProjectRedirectUsageAny)
 	assert.Zero(suite.T(), project.RedirectSettings.Delay)
 	assert.Zero(suite.T(), project.RedirectSettings.ButtonCaption)
