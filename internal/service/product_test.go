@@ -103,7 +103,13 @@ func (suite *ProductTestSuite) SetupTest() {
 		suite.FailNow("Insert price group test data failed", "%v", err)
 	}
 
-	suite.merchant = &billingpb.Merchant{Id: primitive.NewObjectID().Hex(), Banking: &billingpb.MerchantBanking{Currency: "RUB"}}
+	suite.merchant = &billingpb.Merchant{
+		Id: primitive.NewObjectID().Hex(),
+		Banking: &billingpb.MerchantBanking{
+			Currency:                  "RUB",
+			ProcessingDefaultCurrency: "RUB",
+		},
+	}
 	if err := suite.service.merchantRepository.Insert(context.TODO(), suite.merchant); err != nil {
 		suite.FailNow("Insert merchant test data failed", "%v", err)
 	}

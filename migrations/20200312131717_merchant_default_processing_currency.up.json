@@ -1,0 +1,21 @@
+[
+  {
+    "update": "merchant",
+    "updates": [
+      {
+        "q": {"banking": {"$ne": null}, "banking.currency": {"$ne": ""}},
+        "u": [
+          {"$set": {"banking.processing_default_currency": "$banking.currency"}}
+        ],
+        "multi": true
+      },
+      {
+        "q": {"banking": {"$ne": null}, "banking.currency": ""},
+        "u": [
+          {"$set": {"banking.processing_default_currency": ""}}
+        ],
+        "multi": true
+      }
+    ]
+  }
+]

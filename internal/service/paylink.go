@@ -229,7 +229,6 @@ func (s *Service) CreateOrUpdatePaylink(
 	req *billingpb.CreatePaylinkRequest,
 	res *billingpb.GetPaylinkResponse,
 ) (err error) {
-
 	isNew := req.GetId() == ""
 
 	pl := &billingpb.Paylink{}

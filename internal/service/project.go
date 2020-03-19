@@ -98,7 +98,7 @@ func (s *Service) ChangeProject(
 	}
 
 	if req.VirtualCurrency != nil {
-		payoutCurrency := merchant.GetPayoutCurrency()
+		payoutCurrency := merchant.GetProcessingDefaultCurrency()
 		err = s.validateProjectVirtualCurrency(req.VirtualCurrency, payoutCurrency)
 
 		if err != nil {

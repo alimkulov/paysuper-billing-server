@@ -75,6 +75,7 @@ type OrderTestSuite struct {
 	paylink2                               *billingpb.Paylink // deleted paylink
 	paylink3                               *billingpb.Paylink // expired paylink
 	operatingCompany                       *billingpb.OperatingCompany
+	productWithProcessingDefaultCurrency   *billingpb.Product
 
 	logObserver *zap.Logger
 	zapRecorder *observer.ObservedLogs
@@ -320,6 +321,15 @@ func (suite *OrderTestSuite) SetupTest() {
 				Brand:              []string{"VISA", "MASTERCARD"},
 			},
 			keyUsdVisa: {
+				TerminalId:         "15985",
+				Secret:             "A1tph4I6BD0f",
+				SecretCallback:     "0V1rJ7t4jCRv",
+				Currency:           "USD",
+				MccCode:            billingpb.MccCodeLowRisk,
+				OperatingCompanyId: suite.operatingCompany.Id,
+				Brand:              []string{"VISA", "MASTERCARD"},
+			},
+			keyUahVisa: {
 				TerminalId:         "15985",
 				Secret:             "A1tph4I6BD0f",
 				SecretCallback:     "0V1rJ7t4jCRv",
@@ -670,13 +680,14 @@ func (suite *OrderTestSuite) SetupTest() {
 			},
 		},
 		Banking: &billingpb.MerchantBanking{
-			Currency:             "USD",
-			Name:                 "Bank name",
-			Address:              "address",
-			AccountNumber:        "0000001",
-			Swift:                "swift",
-			CorrespondentAccount: "correspondent_account",
-			Details:              "details",
+			Currency:                  "USD",
+			Name:                      "Bank name",
+			Address:                   "address",
+			AccountNumber:             "0000001",
+			Swift:                     "swift",
+			CorrespondentAccount:      "correspondent_account",
+			Details:                   "details",
+			ProcessingDefaultCurrency: "RUB",
 		},
 		IsVatEnabled:              true,
 		IsCommissionToUserEnabled: true,
@@ -815,13 +826,14 @@ func (suite *OrderTestSuite) SetupTest() {
 			},
 		},
 		Banking: &billingpb.MerchantBanking{
-			Currency:             "RUB",
-			Name:                 "Bank name",
-			Address:              "address",
-			AccountNumber:        "0000001",
-			Swift:                "swift",
-			CorrespondentAccount: "correspondent_account",
-			Details:              "details",
+			Currency:                  "RUB",
+			Name:                      "Bank name",
+			Address:                   "address",
+			AccountNumber:             "0000001",
+			Swift:                     "swift",
+			CorrespondentAccount:      "correspondent_account",
+			Details:                   "details",
+			ProcessingDefaultCurrency: "RUB",
 		},
 		IsVatEnabled:              true,
 		IsCommissionToUserEnabled: true,
@@ -899,13 +911,14 @@ func (suite *OrderTestSuite) SetupTest() {
 			},
 		},
 		Banking: &billingpb.MerchantBanking{
-			Currency:             "RUB",
-			Name:                 "Bank name",
-			Address:              "address",
-			AccountNumber:        "0000001",
-			Swift:                "swift",
-			CorrespondentAccount: "correspondent_account",
-			Details:              "details",
+			Currency:                  "RUB",
+			Name:                      "Bank name",
+			Address:                   "address",
+			AccountNumber:             "0000001",
+			Swift:                     "swift",
+			CorrespondentAccount:      "correspondent_account",
+			Details:                   "details",
+			ProcessingDefaultCurrency: "RUB",
 		},
 		IsVatEnabled:              true,
 		IsCommissionToUserEnabled: true,
@@ -1423,6 +1436,16 @@ func (suite *OrderTestSuite) SetupTest() {
 		BankCountryName:    "UKRAINE",
 		BankCountryIsoCode: "UA",
 	}
+	bin3 := &intPkg.BinData{
+		Id:                 primitive.NewObjectID(),
+		CardBin:            555555,
+		CardBrand:          "VISA",
+		CardType:           "DEBIT",
+		CardCategory:       "WORLD",
+		BankName:           "ALFA BANK",
+		BankCountryName:    "USA",
+		BankCountryIsoCode: "US",
+	}
 
 	suite.log, err = zap.NewProduction()
 
@@ -1554,6 +1577,31 @@ func (suite *OrderTestSuite) SetupTest() {
 		assert.NoError(suite.T(), suite.service.CreateOrUpdateProduct(context.TODO(), req, &prod))
 
 		productIds = append(productIds, prod.Id)
+	}
+
+	productWithProcessingDefaultCurrencyReq := &billingpb.Product{
+		Object:          "product",
+		Type:            "simple_product",
+		Sku:             "product_with_processing_default_currency",
+		Name:            map[string]string{"en": "product_with_processing_default_currency"},
+		DefaultCurrency: merchant.Banking.ProcessingDefaultCurrency,
+		Enabled:         true,
+		Description:     map[string]string{"en": "product_with_processing_default_currency"},
+		MerchantId:      projectWithProducts.MerchantId,
+		ProjectId:       projectWithProducts.Id,
+		Prices: []*billingpb.ProductPrice{
+			{
+				Currency: "RUB",
+				Region:   "RUB",
+				Amount:   100,
+			},
+		},
+	}
+	suite.productWithProcessingDefaultCurrency = &billingpb.Product{}
+	err = suite.service.CreateOrUpdateProduct(context.TODO(), productWithProcessingDefaultCurrencyReq, suite.productWithProcessingDefaultCurrency)
+
+	if err != nil {
+		suite.FailNow("Product with processing default currency create failed", "%v", err)
 	}
 
 	var productIdsWithVirtualCurrency []string
@@ -1792,10 +1840,22 @@ func (suite *OrderTestSuite) SetupTest() {
 		MccCode:            billingpb.MccCodeLowRisk,
 		OperatingCompanyId: suite.operatingCompany.Id,
 	}
+
 	sysCost3 := &billingpb.PaymentChannelCostSystem{
 		Name:               "Bitcoin",
 		Region:             billingpb.TariffRegionRussiaAndCis,
 		Country:            "RU",
+		Percent:            2.2,
+		FixAmount:          0,
+		FixAmountCurrency:  "USD",
+		IsActive:           true,
+		MccCode:            billingpb.MccCodeLowRisk,
+		OperatingCompanyId: suite.operatingCompany.Id,
+	}
+	sysCost4 := &billingpb.PaymentChannelCostSystem{
+		Name:               "VISA",
+		Region:             billingpb.TariffRegionWorldwide,
+		Country:            "US",
 		Percent:            2.2,
 		FixAmount:          0,
 		FixAmountCurrency:  "USD",
@@ -1811,6 +1871,7 @@ func (suite *OrderTestSuite) SetupTest() {
 			sysCost1,
 			sysCost2,
 			sysCost3,
+			sysCost4,
 		},
 	)
 
@@ -1984,6 +2045,22 @@ func (suite *OrderTestSuite) SetupTest() {
 		IsActive:                true,
 		MccCode:                 billingpb.MccCodeLowRisk,
 	}
+	merCost10 := &billingpb.PaymentChannelCostMerchant{
+		MerchantId:              project.GetMerchantId(),
+		Name:                    "VISA",
+		PayoutCurrency:          "USD",
+		MinAmount:               0,
+		Region:                  billingpb.TariffRegionWorldwide,
+		Country:                 "US",
+		MethodPercent:           2.5,
+		MethodFixAmount:         2,
+		PsPercent:               5,
+		PsFixedFee:              0.05,
+		PsFixedFeeCurrency:      "EUR",
+		MethodFixAmountCurrency: "USD",
+		IsActive:                true,
+		MccCode:                 billingpb.MccCodeLowRisk,
+	}
 
 	err = suite.service.paymentChannelCostMerchantRepository.
 		MultipleInsert(context.TODO(), []*billingpb.PaymentChannelCostMerchant{
@@ -1997,6 +2074,7 @@ func (suite *OrderTestSuite) SetupTest() {
 			merCost7,
 			merCost8,
 			merCost9,
+			merCost10,
 		})
 
 	if err != nil {
@@ -2235,7 +2313,7 @@ func (suite *OrderTestSuite) SetupTest() {
 		suite.FailNow("Insert operatingCompany test data failed", "%v", err)
 	}
 
-	err = suite.service.bankBinRepository.MultipleInsert(context.TODO(), []*intPkg.BinData{bin, bin2})
+	err = suite.service.bankBinRepository.MultipleInsert(context.TODO(), []*intPkg.BinData{bin, bin2, bin3})
 
 	if err != nil {
 		suite.FailNow("Insert BIN test data failed", "%v", err)
@@ -4800,7 +4878,7 @@ func (suite *OrderTestSuite) TestOrder_ProcessPaymentFormData_GetBinData_Error()
 		billingpb.PaymentCreateFieldOrderId:         rsp.Uuid,
 		billingpb.PaymentCreateFieldPaymentMethodId: suite.paymentMethod.Id,
 		billingpb.PaymentCreateFieldEmail:           "test@unit.unit",
-		billingpb.PaymentCreateFieldPan:             "5555555555554444",
+		billingpb.PaymentCreateFieldPan:             "4111111111111111",
 		billingpb.PaymentCreateFieldCvv:             "123",
 		billingpb.PaymentCreateFieldMonth:           "02",
 		billingpb.PaymentCreateFieldYear:            "2100",
@@ -5796,7 +5874,7 @@ func (suite *OrderTestSuite) TestOrder_PaymentFormPaymentAccountChanged_BinDataN
 	req1 := &billingpb.PaymentFormUserChangePaymentAccountRequest{
 		OrderId:  rsp.Uuid,
 		MethodId: suite.paymentMethod.Id,
-		Account:  "5555555555554444",
+		Account:  "6555555555554444",
 	}
 	rsp1 := &billingpb.PaymentFormDataChangeResponse{}
 	err = suite.service.PaymentFormPaymentAccountChanged(context.TODO(), req1, rsp1)
@@ -9046,4 +9124,158 @@ func (suite *OrderTestSuite) TestOrder_GetPaymentFormRenderingDataByOrder_Ok() {
 	assert.Equal(suite.T(), rsp2.Item.Project.RedirectSettings.Delay, suite.project.RedirectSettings.Delay)
 	assert.Equal(suite.T(), rsp2.Item.Project.RedirectSettings.ButtonCaption, suite.project.RedirectSettings.ButtonCaption)
 	assert.Zero(suite.T(), rsp2.Item.Project.RedirectSettings.ButtonCaption)
+}
+
+func (suite *OrderTestSuite) TestOrder_OrderWithProducts_BankingCurrencyNotMatchProcessingCurrency_AccountingEntries_Ok() {
+	req := &billingpb.OrderCreateRequest{
+		ProjectId:   suite.projectWithProducts.Id,
+		Account:     "unit test",
+		Description: "unit test",
+		OrderId:     primitive.NewObjectID().Hex(),
+		Products:    []string{suite.productWithProcessingDefaultCurrency.Id},
+		User: &billingpb.OrderUser{
+			Email: "test@unit.unit",
+			Ip:    "127.0.0.2",
+		},
+		Type: pkg.OrderType_product,
+	}
+
+	rsp := &billingpb.OrderCreateProcessResponse{}
+	err := suite.service.OrderCreateProcess(context.TODO(), req, rsp)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), rsp.Status, billingpb.ResponseStatusOk)
+	assert.Equal(suite.T(), rsp.Item.Currency, suite.productWithProcessingDefaultCurrency.DefaultCurrency)
+	assert.Equal(suite.T(), rsp.Item.OrderAmount, suite.productWithProcessingDefaultCurrency.Prices[0].Amount)
+	assert.Equal(suite.T(), rsp.Item.Currency, rsp.Item.ChargeCurrency)
+	assert.Equal(suite.T(), rsp.Item.TotalPaymentAmount, rsp.Item.ChargeAmount)
+
+	req0 := &billingpb.PaymentFormUserChangePaymentAccountRequest{
+		OrderId:  rsp.Item.Uuid,
+		MethodId: suite.paymentMethod.Id,
+		Account:  "5555555555554444",
+		Ip:       "127.0.0.2",
+	}
+	rsp0 := &billingpb.PaymentFormDataChangeResponse{}
+	err = suite.service.PaymentFormPaymentAccountChanged(context.TODO(), req0, rsp0)
+	assert.Nil(suite.T(), err)
+	assert.EqualValues(suite.T(), billingpb.ResponseStatusOk, rsp0.Status)
+	assert.Empty(suite.T(), rsp0.Message)
+
+	req1 := &billingpb.PaymentCreateRequest{
+		Data: map[string]string{
+			billingpb.PaymentCreateFieldOrderId:         rsp.Item.Uuid,
+			billingpb.PaymentCreateFieldPaymentMethodId: suite.paymentMethod.Id,
+			billingpb.PaymentCreateFieldEmail:           "test@unit.unit",
+			billingpb.PaymentCreateFieldPan:             "5555555555554444",
+			billingpb.PaymentCreateFieldCvv:             "123",
+			billingpb.PaymentCreateFieldMonth:           "02",
+			billingpb.PaymentCreateFieldYear:            time.Now().AddDate(1, 0, 0).Format("2006"),
+			billingpb.PaymentCreateFieldHolder:          "MR. CARD HOLDER",
+			billingpb.PaymentCreateFieldUserCountry:     "US",
+		},
+		Ip: "127.0.0.2",
+	}
+
+	rsp1 := &billingpb.PaymentCreateResponse{}
+	err = suite.service.PaymentCreateProcess(context.TODO(), req1, rsp1)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), billingpb.ResponseStatusOk, rsp1.Status)
+
+	order, err := suite.service.orderRepository.GetById(context.TODO(), rsp.Item.Id)
+	assert.NoError(suite.T(), err)
+	assert.NotNil(suite.T(), order)
+	assert.IsType(suite.T(), &billingpb.Order{}, order)
+
+	callbackRequest := &billingpb.CardPayPaymentCallback{
+		PaymentMethod: suite.paymentMethod.ExternalId,
+		CallbackTime:  time.Now().Format("2006-01-02T15:04:05Z"),
+		MerchantOrder: &billingpb.CardPayMerchantOrder{
+			Id:          rsp.Item.Id,
+			Description: rsp.Item.Description,
+			Items: []*billingpb.CardPayItem{
+				{
+					Name:        order.Items[0].Name,
+					Description: order.Items[0].Name,
+					Count:       1,
+					Price:       order.Items[0].Amount,
+				},
+			},
+		},
+		CardAccount: &billingpb.CallbackCardPayBankCardAccount{
+			Holder:             order.PaymentRequisites[billingpb.PaymentCreateFieldHolder],
+			IssuingCountryCode: "RU",
+			MaskedPan:          order.PaymentRequisites[billingpb.PaymentCreateFieldPan],
+			Token:              primitive.NewObjectID().Hex(),
+		},
+		Customer: &billingpb.CardPayCustomer{
+			Email:  rsp.Item.User.Email,
+			Ip:     rsp.Item.User.Ip,
+			Id:     rsp.Item.ProjectAccount,
+			Locale: "Europe/Moscow",
+		},
+		PaymentData: &billingpb.CallbackCardPayPaymentData{
+			Id:          primitive.NewObjectID().Hex(),
+			Amount:      order.ChargeAmount,
+			Currency:    order.ChargeCurrency,
+			Description: order.Description,
+			Is_3D:       true,
+			Rrn:         primitive.NewObjectID().Hex(),
+			Status:      billingpb.CardPayPaymentResponseStatusCompleted,
+		},
+	}
+
+	buf, err := json.Marshal(callbackRequest)
+	assert.NoError(suite.T(), err)
+
+	hash := sha512.New()
+	hash.Write([]byte(string(buf) + order.PaymentMethod.Params.SecretCallback))
+
+	callbackData := &billingpb.PaymentNotifyRequest{
+		OrderId:   order.Id,
+		Request:   buf,
+		Signature: hex.EncodeToString(hash.Sum(nil)),
+	}
+
+	callbackResponse := &billingpb.PaymentNotifyResponse{}
+	err = suite.service.PaymentCallbackProcess(context.TODO(), callbackData, callbackResponse)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), pkg.StatusOK, callbackResponse.Status)
+
+	order, err = suite.service.orderRepository.GetById(context.TODO(), order.Id)
+	assert.NoError(suite.T(), err)
+	assert.NotNil(suite.T(), order)
+	assert.IsType(suite.T(), &billingpb.Order{}, order)
+	assert.Equal(suite.T(), int32(recurringpb.OrderStatusPaymentSystemComplete), order.PrivateStatus)
+
+	accountingEntries, err := suite.service.accountingRepository.FindBySource(ctx, order.Id, repository.CollectionOrder)
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), accountingEntries)
+
+	expectEntries := map[string]struct {
+		Amount   float64
+		Currency string
+	}{
+		"real_gross_revenue":                        {Amount: 1.83, Currency: "USD"},
+		"real_tax_fee":                              {Amount: 0.292185, Currency: "USD"},
+		"central_bank_tax_fee":                      {Amount: 0, Currency: "USD"},
+		"ps_gross_revenue_fx":                       {Amount: 0, Currency: "USD"},
+		"ps_gross_revenue_fx_tax_fee":               {Amount: 0, Currency: "USD"},
+		"merchant_tax_fee_cost_value":               {Amount: 0.292185, Currency: "USD"},
+		"merchant_tax_fee_central_bank_fx":          {Amount: 0, Currency: "USD"},
+		"ps_method_fee":                             {Amount: 9.15, Currency: "USD"},
+		"merchant_method_fee":                       {Amount: 4.575, Currency: "USD"},
+		"merchant_method_fee_cost_value":            {Amount: 4.026, Currency: "USD"},
+		"merchant_method_fixed_fee":                 {Amount: 2.0, Currency: "USD"},
+		"real_merchant_method_fixed_fee":            {Amount: 2.0, Currency: "USD"},
+		"real_merchant_method_fixed_fee_cost_value": {Amount: 0, Currency: "USD"},
+		"merchant_ps_fixed_fee":                     {Amount: 0.056492, Currency: "USD"},
+		"real_merchant_ps_fixed_fee":                {Amount: 0.055385, Currency: "USD"},
+	}
+
+	for _, v := range accountingEntries {
+		entry, ok := expectEntries[v.Type]
+		assert.True(suite.T(), ok)
+		assert.EqualValues(suite.T(), entry.Amount, v.Amount)
+		assert.Equal(suite.T(), entry.Currency, v.Currency)
+	}
 }

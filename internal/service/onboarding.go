@@ -275,6 +275,10 @@ func (s *Service) ChangeMerchant(
 				rsp.Message = merchantErrorCurrencyNotFound
 				return nil
 			}
+
+			if req.Banking.ProcessingDefaultCurrency == "" {
+				req.Banking.ProcessingDefaultCurrency = req.Banking.Currency
+			}
 		}
 
 		if req.Banking.AccountNumber != "" {

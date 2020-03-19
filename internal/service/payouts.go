@@ -10,6 +10,7 @@ import (
 	"github.com/paysuper/paysuper-proto/go/billingpb"
 	"github.com/paysuper/paysuper-proto/go/postmarkpb"
 	"github.com/paysuper/paysuper-proto/go/reporterpb"
+	tools "github.com/paysuper/paysuper-tools/number"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -163,7 +164,9 @@ func (s *Service) createPayoutDocument(
 		return nil
 	}
 
-	if pd.Balance > (balance.Debit - balance.Credit) {
+	balanceNet := tools.ToPrecise(balance.Debit - balance.Credit)
+
+	if pd.Balance > balanceNet {
 		res.Status = billingpb.ResponseStatusBadData
 		res.Message = errorPayoutNotEnoughBalance
 		return nil

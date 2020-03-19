@@ -226,7 +226,7 @@ const (
 	CasbinMerchantUserMask = "%s_%s"
 
 	EmailConfirmUrl            = "%s/confirm_email"
-	RoyaltyReportsUrl          = "%s/royalty_reports"
+	RoyaltyReportsUrl          = "%s/reports"
 	RoyaltyReportUrl           = "%s/reports/%s"
 	PayoutsUrl                 = "%s/payouts"
 	ReceiptPurchaseUrl         = "%s/pay/receipt/purchase/%s/%s"
